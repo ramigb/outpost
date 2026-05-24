@@ -1,0 +1,23 @@
+{
+  "name": "@outpost/mothership",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "outpost-mothership": "dist/cli.js"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.11.5",
+    "@openrouter/sdk": "^0.12.35",
+    "@outpost/protocol": "0.1.0",
+    "@outpost/shared": "0.1.0",
+    "openai": "^6.39.0",
+    "ws": "^8.17.0",
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  }
+}

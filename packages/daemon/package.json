@@ -1,0 +1,19 @@
+{
+  "name": "@outpost/daemon",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "outpost-daemon": "dist/cli.js"
+  },
+  "dependencies": {
+    "@outpost/protocol": "0.1.0",
+    "@outpost/shared": "0.1.0",
+    "ws": "^8.17.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "outpost",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI-first deployment harness with Mothership, Outpost daemon, and Beacon relay.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b packages/protocol packages/shared packages/daemon packages/beacon packages/mothership",
+    "typecheck": "tsc -b --pretty false packages/protocol packages/shared packages/daemon packages/beacon packages/mothership",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "npm run format:check && npm run lint && npm run typecheck",
+    "clean": "tsc -b --clean packages/protocol packages/shared packages/daemon packages/beacon packages/mothership",
+    "start-mothership": "PORT=4173 node packages/mothership/dist/cli.js start",
+    "start-beacon": "node packages/beacon/dist/cli.js --port 8787",
+    "test-mothership": "node -e \"import('node:http').then((http) => http.get('http://127.0.0.1:4173', (res) => { console.log('STATUS:', res.statusCode); process.exit(0); }).on('error', (e) => { console.error('ERROR', e); process.exit(1); }))\"",
+    "debug-port": "node -e \"console.log('PORT:', process.env.PORT, 'PARSED:', Number(process.env.PORT ?? 4173))\"",
+    "ps": "ps aux | grep node"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.12.12",
+    "@types/ws": "^8.5.10",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.59.4"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.11.5",
+    "openai": "^6.39.0",
+    "ws": "^8.17.0",
+    "zod": "^4.4.3"
+  }
+}
