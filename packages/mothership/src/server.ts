@@ -1848,13 +1848,15 @@ function indexHtml(): string {
   <script>
     let currentState = null;
     let chatMessages = [];
+    let consoleLogs = [];
     let lastRenderedStateHash = '';
     let isRefreshing = false;
     let pendingRefresh = false;
 
     // Load Chat History
     try {
-      chatMessages = JSON.parse(localStorage.getItem('outpost_chat_history')) || [];
+      const savedChat = JSON.parse(localStorage.getItem('outpost_chat_history'));
+      chatMessages = Array.isArray(savedChat) ? savedChat : [];
     } catch (e) {
       chatMessages = [];
     }
@@ -1865,6 +1867,8 @@ function indexHtml(): string {
         text: 'Welcome to Outpost Mothership. I am your local AI deployment operator. I can help you plan deployments, inspect hosts, pair outposts, recommend recipes, and orchestrate updates.'
       });
     }
+
+    persistChatMessages();
 
     function hashState(state) {
       if (!state) return '';
@@ -2072,12 +2076,19 @@ function indexHtml(): string {
       container.scrollTop = container.scrollHeight;
     }
 
+    function persistChatMessages() {
+      const durableMessages = chatMessages.filter(function(msg) {
+        return !msg.isStreaming;
+      }).slice(-50);
+      localStorage.setItem('outpost_chat_history', JSON.stringify(durableMessages));
+    }
+
     function addChatMessage(sender, text) {
       chatMessages.push({ sender: sender, text: text });
       if (chatMessages.length > 50) {
         chatMessages.shift();
       }
-      localStorage.setItem('outpost_chat_history', JSON.stringify(chatMessages));
+      persistChatMessages();
       renderChat();
     }
 
@@ -2316,9 +2327,6 @@ function indexHtml(): string {
             localStorage.removeItem('outpost_chat_history');
           }
           let reply = fullMessage;
-          if (toolCalls > 0) {
-            reply += '\\n\\n' + formatToolSummary(toolEvents);
-          }
           addChatMessage('operator', reply);
         }
       } catch (err) {
@@ -2333,6 +2341,12 @@ function indexHtml(): string {
     }
     
     function handleStreamEvent(event, msgId) {
+      if (event.type === 'warning') {
+        addConsoleLog(event.message, 'system');
+        addChatMessage('system', event.message);
+        return;
+      }
+
       const msg = chatMessages.find(function(m) { return m.id === msgId; });
       if (!msg) return;
       
@@ -2373,16 +2387,7 @@ function indexHtml(): string {
         parts.push('*Thinking:* ' + thinking[thinking.length - 1]);
       }
       if (toolCalls && toolCalls.length) {
-        for (const tc of toolCalls) {
-          let section = 'Tool: ' + tc.name + ' [' + (tc.status || 'pending') + ']';
-          if (tc.input !== undefined) {
-            section += '\\nParams:\\n\`\`\`json\\n' + compactJson(tc.input, 2000) + '\\n\`\`\`';
-          }
-          if (tc.result !== undefined) {
-            section += '\\nOutput:\\n\`\`\`json\\n' + compactJson(tc.result, 4000) + '\\n\`\`\`';
-          }
-          parts.push(section);
-        }
+        parts.push('Working with deployment tools...');
       }
       return parts.join('\\n\\n');
     }
@@ -2400,24 +2405,14 @@ function indexHtml(): string {
       return text;
     }
 
-    function formatToolSummary(toolEvents) {
-      if (!toolEvents || !toolEvents.length) return 'Tool calls: 0';
-      const parts = ['Tool calls: ' + toolEvents.length];
-      toolEvents.forEach(function(tc, index) {
-        let section = String(index + 1) + '. ' + tc.name + ' [' + (tc.status || 'completed') + ']';
-        if (tc.input !== undefined) {
-          section += '\\nParams:\\n\`\`\`json\\n' + compactJson(tc.input, 2000) + '\\n\`\`\`';
-        }
-        if (tc.result !== undefined) {
-          section += '\\nOutput:\\n\`\`\`json\\n' + compactJson(tc.result, 4000) + '\\n\`\`\`';
-        }
-        parts.push(section);
-      });
-      return parts.join('\\n\\n');
-    }
-    
     function addConsoleLog(text, source) {
       const container = document.getElementById('activity');
+      consoleLogs.unshift({
+        at: new Date().toLocaleTimeString(),
+        text: text,
+        source: source === 'ai' ? 'ai' : 'system'
+      });
+      consoleLogs = consoleLogs.slice(0, 100);
       if (!container) return;
       const line = document.createElement('div');
       line.className = 'log-line ' + (source === 'ai' ? 'ai-event' : 'system-event');
@@ -2492,6 +2487,7 @@ function indexHtml(): string {
       renderPlugins(state);
       renderOutposts(state);
       renderActivity(state);
+      renderChat();
       renderRecipes(state);
       renderTools(state);
     }
@@ -2638,12 +2634,15 @@ function indexHtml(): string {
       const operations = (state.operations && state.operations.operations) || [];
       const container = document.getElementById('activity');
       if (!container) return;
-      if (!results.length && !logs.length && !operations.length) {
+      if (!results.length && !logs.length && !operations.length && !consoleLogs.length) {
         container.innerHTML = '<div class="log-line text-muted">No system activity logged yet.</div>';
         return;
       }
       
-      container.innerHTML = operations.slice(0, 8).map(function(operation) {
+      container.innerHTML = consoleLogs.slice(0, 40).map(function(item) {
+        const sourceClass = item.source === 'ai' ? 'ai-event' : 'system-event';
+        return '<div class="log-line ' + sourceClass + '">[' + escapeHtml(item.at) + '] ' + escapeHtml(item.text) + '</div>';
+      }).join('') + operations.slice(0, 8).map(function(operation) {
         const isPending = operation.status === 'waiting_approval' || (operation.approval && operation.approval.status === 'required');
         const approval = isPending ? ' <button class="btn-secondary approve-btn" data-op-id="' + escapeAttr(operation.id) + '" style="margin-left:8px;padding:1px 6px;font-size:10px;">Approve</button>' : '';
         const sourceClass = operation.source === 'ai' ? 'ai-event' : (operation.source === 'user' ? 'system-event' : '');
@@ -2765,6 +2764,7 @@ function indexHtml(): string {
     });
 
     // Boot
+    renderChat();
     refresh();
     setInterval(refresh, 5000);
   </script>

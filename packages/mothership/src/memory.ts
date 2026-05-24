@@ -41,11 +41,34 @@ export type AgentMemoryBootstrap = {
   usage: AgentContextUsage;
 };
 
+export type AgentToolQuotaSnapshot = {
+  limit: number;
+  used: number;
+  remaining: number;
+  resetAt: string;
+  warningThreshold: number;
+};
+
+export class AgentToolQuotaExceededError extends Error {
+  constructor(snapshot: AgentToolQuotaSnapshot) {
+    super(toolQuotaExceededMessage(snapshot));
+    this.name = "AgentToolQuotaExceededError";
+  }
+}
+
+type AgentToolQuotaState = {
+  windowStartedAt: string;
+  used: number;
+};
+
 const MAX_SUMMARY_CHARS = 1800;
 const MAX_RECENT_TURNS = 4;
 const MAX_USER_CHARS = 700;
 const MAX_ASSISTANT_CHARS = 900;
 const EMPTY_SUMMARY = "No durable session facts yet.";
+export const AGENT_TOOL_CALL_LIMIT = 500;
+export const AGENT_TOOL_CALL_WINDOW_MS = 10 * 60_000;
+export const AGENT_TOOL_CALL_WARNING_THRESHOLD = Math.floor(AGENT_TOOL_CALL_LIMIT * 0.9);
 
 export function isResetCommand(message: string): boolean {
   return message.trim().toLowerCase() === "/reset";
@@ -58,7 +81,8 @@ export function memoryPaths(
     base,
     state: join(base, "session.json"),
     context: join(base, "context.md"),
-    usage: join(base, "usage.json")
+    usage: join(base, "usage.json"),
+    toolQuota: join(base, "tool-quota.json")
   };
 }
 
@@ -127,6 +151,33 @@ export async function getAgentMemorySnapshot(): Promise<
   return { ...state, paths: memoryPaths() };
 }
 
+export async function consumeAgentToolCall(): Promise<AgentToolQuotaSnapshot> {
+  const state = await readToolQuotaState();
+  if (state.used >= AGENT_TOOL_CALL_LIMIT) {
+    throw new AgentToolQuotaExceededError(snapshotToolQuota(state));
+  }
+  return writeToolQuotaState({
+    ...state,
+    used: state.used + 1
+  }).then(snapshotToolQuota);
+}
+
+export async function getAgentToolQuotaSnapshot(): Promise<AgentToolQuotaSnapshot> {
+  return snapshotToolQuota(await readToolQuotaState());
+}
+
+export function shouldWarnAgentToolQuota(snapshot: AgentToolQuotaSnapshot): boolean {
+  return snapshot.used >= snapshot.warningThreshold;
+}
+
+export function toolQuotaWarningMessage(snapshot: AgentToolQuotaSnapshot): string {
+  return [
+    `Tool call warning: ${snapshot.used}/${snapshot.limit} calls used in the current 10-minute window.`,
+    `${snapshot.remaining} calls remain until ${new Date(snapshot.resetAt).toLocaleTimeString()}.`,
+    "If the agent is looping or inspecting too broadly, ask it to stop, summarize what it found, and continue after the reset time with a narrower request."
+  ].join(" ");
+}
+
 function defaultMemoryState(): MemoryState {
   const now = new Date().toISOString();
   return {
@@ -166,6 +217,57 @@ async function writeMemoryState(state: MemoryState): Promise<MemoryState> {
     await writeJsonFile(paths.usage, state.lastUsage, 0o600);
   }
   return state;
+}
+
+async function readToolQuotaState(): Promise<AgentToolQuotaState> {
+  const paths = memoryPaths();
+  await mkdir(paths.base, { recursive: true });
+  const now = Date.now();
+  if (!(await pathExists(paths.toolQuota))) {
+    return writeToolQuotaState(newToolQuotaState(now));
+  }
+  const parsed = JSON.parse(await readFile(paths.toolQuota, "utf8")) as Partial<AgentToolQuotaState>;
+  const windowStartedAt =
+    typeof parsed.windowStartedAt === "string" ? Date.parse(parsed.windowStartedAt) : Number.NaN;
+  if (!Number.isFinite(windowStartedAt) || now - windowStartedAt >= AGENT_TOOL_CALL_WINDOW_MS) {
+    return writeToolQuotaState(newToolQuotaState(now));
+  }
+  return {
+    windowStartedAt: new Date(windowStartedAt).toISOString(),
+    used: typeof parsed.used === "number" && Number.isFinite(parsed.used) ? parsed.used : 0
+  };
+}
+
+async function writeToolQuotaState(state: AgentToolQuotaState): Promise<AgentToolQuotaState> {
+  await writeJsonFile(memoryPaths().toolQuota, state, 0o600);
+  return state;
+}
+
+function newToolQuotaState(now: number): AgentToolQuotaState {
+  return {
+    windowStartedAt: new Date(now).toISOString(),
+    used: 0
+  };
+}
+
+function snapshotToolQuota(state: AgentToolQuotaState): AgentToolQuotaSnapshot {
+  const windowStartedAt = Date.parse(state.windowStartedAt);
+  const resetAt = new Date(windowStartedAt + AGENT_TOOL_CALL_WINDOW_MS).toISOString();
+  const used = Math.max(0, Math.min(AGENT_TOOL_CALL_LIMIT, state.used));
+  return {
+    limit: AGENT_TOOL_CALL_LIMIT,
+    used,
+    remaining: Math.max(0, AGENT_TOOL_CALL_LIMIT - used),
+    resetAt,
+    warningThreshold: AGENT_TOOL_CALL_WARNING_THRESHOLD
+  };
+}
+
+function toolQuotaExceededMessage(snapshot: AgentToolQuotaSnapshot): string {
+  return [
+    `Tool call limit reached: ${snapshot.used}/${snapshot.limit} calls used in the current 10-minute window.`,
+    `Wait until ${new Date(snapshot.resetAt).toLocaleTimeString()} for the counter to reset, then retry with a narrower request or ask the agent to continue from its last summary.`
+  ].join(" ");
 }
 
 async function writeTextFile(path: string, value: string, mode: number): Promise<void> {

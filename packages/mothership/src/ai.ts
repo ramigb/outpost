@@ -7,10 +7,14 @@ import {
 } from "@outpost/shared";
 import { listBootstrapOperations, startBootstrap } from "./bootstrap.js";
 import {
+  AgentToolQuotaExceededError,
   appendAgentMemory,
   buildAgentMemoryBootstrap,
+  getAgentToolQuotaSnapshot,
   isResetCommand,
   resetAgentMemory,
+  shouldWarnAgentToolQuota,
+  toolQuotaWarningMessage,
   type TokenUsage
 } from "./memory.js";
 import { listPlugins, pluginTemplate, upsertPlugin } from "./plugins.js";
@@ -34,6 +38,8 @@ import { executeTool, listTools, type ToolRunContext } from "./tools.js";
 import OpenAI from "openai";
 import { OpenRouter } from "@openrouter/sdk";
 import type { AgentStreamEvent } from "./agent.js";
+
+const MAX_OPENROUTER_TOOL_TURNS = 500;
 
 export type StreamEvent = AgentStreamEvent;
 
@@ -202,6 +208,7 @@ export async function* askAiAgentStreamed(input: {
       | { message: string; pluginCreated?: string; toolCalls?: number; usage?: TokenUsage }
       | undefined;
     let toolCalls = 0;
+    let quotaWarningSent = false;
     const iterator = stream[Symbol.asyncIterator]();
     while (true) {
       const step = await iterator.next();
@@ -212,6 +219,13 @@ export async function* askAiAgentStreamed(input: {
       const event = step.value;
       yield event;
       if (event.type === "tool_call") toolCalls += 1;
+      if (event.type === "tool_result" && !quotaWarningSent) {
+        const warning = await agentToolQuotaWarningEvent();
+        if (warning) {
+          quotaWarningSent = true;
+          yield warning;
+        }
+      }
       if (event.type === "message") result = { message: event.content, toolCalls };
     }
     await appendAgentMemory({
@@ -229,6 +243,7 @@ export async function* askAiAgentStreamed(input: {
     | { message: string; pluginCreated?: string; toolCalls?: number; usage?: TokenUsage }
     | undefined;
   let toolCalls = 0;
+  let quotaWarningSent = false;
   const iterator = stream[Symbol.asyncIterator]();
   while (true) {
     const step = await iterator.next();
@@ -239,6 +254,13 @@ export async function* askAiAgentStreamed(input: {
     const event = step.value;
     yield event;
     if (event.type === "tool_call") toolCalls += 1;
+    if (event.type === "tool_result" && !quotaWarningSent) {
+      const warning = await agentToolQuotaWarningEvent();
+      if (warning) {
+        quotaWarningSent = true;
+        yield warning;
+      }
+    }
     if (event.type === "message") result = { message: event.content, toolCalls };
   }
   await appendAgentMemory({
@@ -330,7 +352,7 @@ async function* runOpenRouterAgentStreamed(
   let message = "";
   let actualUsage: TokenUsage = {};
   let toolCallCount = 0;
-  for (let turn = 0; turn < 50; turn += 1) {
+  for (let turn = 0; turn < MAX_OPENROUTER_TOOL_TURNS; turn += 1) {
     const completion = await client.chat.send({
       chatRequest: {
         model: status.defaultModel,
@@ -367,6 +389,9 @@ async function* runOpenRouterAgentStreamed(
           ? await handler(parsedArguments)
           : { error: `Unknown Mothership tool: ${name}` };
       } catch (error) {
+        if (error instanceof AgentToolQuotaExceededError) {
+          throw error;
+        }
         result = { error: error instanceof Error ? error.message : String(error) };
       }
       yield { type: "tool_result", toolName: name, result };
@@ -395,6 +420,20 @@ async function* runOpenRouterAgentStreamed(
   yield { type: "message", content: message };
   yield { type: "done" };
   return { message, toolCalls: toolCallCount, usage: actualUsage };
+}
+
+async function agentToolQuotaWarningEvent(): Promise<StreamEvent | undefined> {
+  const snapshot = await getAgentToolQuotaSnapshot();
+  if (!shouldWarnAgentToolQuota(snapshot)) {
+    return undefined;
+  }
+  return {
+    type: "warning",
+    message: toolQuotaWarningMessage(snapshot),
+    used: snapshot.used,
+    limit: snapshot.limit,
+    resetAt: snapshot.resetAt
+  };
 }
 
 type OpenRouterToolHandler = (input: Record<string, unknown>) => Promise<unknown>;

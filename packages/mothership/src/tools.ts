@@ -6,6 +6,7 @@ import {
   type OperationApproval,
   type OperationEvent
 } from "./operations.js";
+import { consumeAgentToolCall } from "./memory.js";
 import { loadMothershipState, type ApprovalMode } from "./state.js";
 
 export type ToolDefinition = {
@@ -330,6 +331,9 @@ export async function executeTool<TResult>(input: {
 }): Promise<ToolExecutionResult<TResult>> {
   const state = await loadMothershipState();
   const tool = getTool(input.toolName);
+  if (input.source === "ai") {
+    await consumeAgentToolCall();
+  }
   const approval = approvalForTool(
     tool,
     state.config.approvals?.mode ?? "automatic",

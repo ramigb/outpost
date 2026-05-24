@@ -13,12 +13,13 @@ import {
 import { startBootstrap } from "./bootstrap.js";
 import { executeTool } from "./tools.js";
 
-const MAX_AGENT_TURNS = 50;
+const MAX_AGENT_TURNS = 500;
 
 export type AgentStreamEvent =
   | { type: "thinking"; content: string }
   | { type: "tool_call"; toolName: string; input: unknown }
   | { type: "tool_result"; toolName: string; result: unknown }
+  | { type: "warning"; message: string; used: number; limit: number; resetAt: string }
   | { type: "message"; content: string }
   | { type: "done" }
   | { type: "error"; message: string };
