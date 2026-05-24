@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { parseOutpostCommand } from "@outpost/protocol";
 import {
   listDeploymentRecipes,
   pathExists,
@@ -28,6 +29,7 @@ import {
 } from "./provisioning.js";
 import {
   defaultAiConfig,
+  createPairingCommand,
   loadMothershipState,
   mothershipPaths,
   normalizeAiConfig,
@@ -35,6 +37,11 @@ import {
   type MothershipAiConfig
 } from "./state.js";
 import { executeTool, listTools, type ToolRunContext } from "./tools.js";
+import {
+  buildOutpostInventory,
+  toolNameForOutpostCommand,
+  type AiOutpostRuntime
+} from "./outposts.js";
 import OpenAI from "openai";
 import { OpenRouter } from "@openrouter/sdk";
 import type { AgentStreamEvent } from "./agent.js";
@@ -151,6 +158,7 @@ export async function assertHarnessProviderReady(): Promise<MothershipAiConfig> 
 export async function askAiAgent(input: {
   message: string;
   allowPluginWrite?: boolean;
+  outposts?: AiOutpostRuntime;
 }): Promise<{ message: string; pluginCreated?: string; usage?: TokenUsage }> {
   if (isResetCommand(input.message)) {
     await resetAgentMemory();
@@ -164,7 +172,11 @@ export async function askAiAgent(input: {
   let result: { message: string; pluginCreated?: string; usage?: TokenUsage; toolCalls?: number };
   if (status.provider === "openai") {
     const { runDeploymentAgent } = await import("./agent.js");
-    result = await runDeploymentAgent({ message: input.message, memoryContext: memory.context });
+    result = await runDeploymentAgent({
+      message: input.message,
+      memoryContext: memory.context,
+      outposts: input.outposts
+    });
   } else {
     result = await runOpenRouterAgent({ ...input, memoryContext: memory.context });
   }
@@ -182,6 +194,7 @@ export async function askAiAgent(input: {
 export async function* askAiAgentStreamed(input: {
   message: string;
   allowPluginWrite?: boolean;
+  outposts?: AiOutpostRuntime;
 }): AsyncGenerator<StreamEvent, { message: string; pluginCreated?: string }, unknown> {
   if (isResetCommand(input.message)) {
     await resetAgentMemory();
@@ -202,7 +215,8 @@ export async function* askAiAgentStreamed(input: {
     const { runDeploymentAgentStreamed } = await import("./agent.js");
     const stream = runDeploymentAgentStreamed({
       message: input.message,
-      memoryContext: memory.context
+      memoryContext: memory.context,
+      outposts: input.outposts
     });
     let result:
       | { message: string; pluginCreated?: string; toolCalls?: number; usage?: TokenUsage }
@@ -277,6 +291,7 @@ type OpenRouterAgentInput = {
   message: string;
   allowPluginWrite?: boolean;
   memoryContext: string;
+  outposts?: AiOutpostRuntime;
 };
 
 async function runOpenRouterAgent(
@@ -310,7 +325,8 @@ async function* runOpenRouterAgentStreamed(
   const apiKey = await readApiKeyForProvider(status.provider);
   const plugins = await listPlugins();
   const operations = await listBootstrapOperations();
-  const { definitions, handlers } = openRouterToolKit();
+  const outposts = await currentOutpostInventory(input.outposts);
+  const { definitions, handlers } = openRouterToolKit(input.outposts);
   const system = [
     "You are the local Outpost Mothership AI agent.",
     "Your domain is deployment and operations for apps on user-owned infrastructure.",
@@ -320,6 +336,9 @@ async function* runOpenRouterAgentStreamed(
     "You do not act as a general coding assistant and you do not invent hidden capabilities.",
     "Beacon strict mode never permits arbitrary shell commands.",
     "If a needed deployment tool is unavailable, say which capability is missing.",
+    "For questions about paired or connected Outposts, call outposts_list before answering.",
+    "Use outpost_send_command for typed Beacon/Outpost operations such as GET_STATE, PING, DOCTOR, DEPLOY, ROLLBACK, DETECT_APP, RUN_HEALTH_CHECK, and APPLY_RECIPE.",
+    "Use outpost_create_pairing to generate setup commands for adding or configuring Outposts.",
     input.memoryContext,
     input.allowPluginWrite
       ? "If you output a fenced code block marked mothership-plugin, it may be installed locally."
@@ -341,7 +360,8 @@ async function* runOpenRouterAgentStreamed(
           message: input.message,
           plugins,
           availableMothershipTools: listTools(),
-          recentBootstrapOperations: operations.slice(0, 5)
+          recentBootstrapOperations: operations.slice(0, 5),
+          outposts
         },
         null,
         2
@@ -438,11 +458,65 @@ async function agentToolQuotaWarningEvent(): Promise<StreamEvent | undefined> {
 
 type OpenRouterToolHandler = (input: Record<string, unknown>) => Promise<unknown>;
 
-function openRouterToolKit(): {
+function openRouterToolKit(outposts?: AiOutpostRuntime): {
   definitions: unknown[];
   handlers: Record<string, OpenRouterToolHandler>;
 } {
   const definitions = [
+    {
+      type: "function",
+      function: {
+        name: "outposts_list",
+        description:
+          "List paired Outposts, live Beacon connectivity, online peers, last known status, recent command results, and recent build logs.",
+        parameters: { type: "object", properties: {}, additionalProperties: false }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "outpost_create_pairing",
+        description:
+          "Create a setup command for adding or configuring an Outpost with optional build hints.",
+        parameters: {
+          type: "object",
+          properties: {
+            beaconUrl: { type: "string" },
+            displayName: { type: "string" },
+            installCommand: { type: "string" },
+            buildCommand: { type: "string" },
+            outputDir: { type: "string" },
+            projectName: { type: "string" },
+            retainReleases: { type: "number" }
+          },
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "outpost_send_command",
+        description:
+          "Send a typed command to a paired Outpost through Beacon. Commands include GET_STATE, PING, DOCTOR, DEPLOY, ROLLBACK, DETECT_APP, RUN_HEALTH_CHECK, and APPLY_RECIPE.",
+        parameters: {
+          type: "object",
+          required: ["peerId", "command"],
+          properties: {
+            peerId: { type: "string" },
+            command: {
+              type: "object",
+              required: ["type"],
+              properties: {
+                type: { type: "string" }
+              },
+              additionalProperties: true
+            }
+          },
+          additionalProperties: false
+        }
+      }
+    },
     {
       type: "function",
       function: {
@@ -571,6 +645,49 @@ function openRouterToolKit(): {
   ];
 
   const handlers: Record<string, OpenRouterToolHandler> = {
+    outposts_list: async () =>
+      runRecordedTool("outpost.list", "AI Operator: list Outposts", "mothership", {}, async () =>
+        currentOutpostInventory(outposts)
+      ),
+    outpost_create_pairing: async (input) =>
+      runRecordedTool(
+        "outpost.create_pairing",
+        "AI Operator: create Outpost pairing command",
+        "mothership",
+        input,
+        async () =>
+          createPairingCommand({
+            beaconUrl: optionalStringInput(input, "beaconUrl"),
+            displayName: optionalStringInput(input, "displayName"),
+            buildHints: {
+              installCommand: optionalStringInput(input, "installCommand"),
+              buildCommand: optionalStringInput(input, "buildCommand"),
+              outputDir: optionalStringInput(input, "outputDir"),
+              projectName: optionalStringInput(input, "projectName"),
+              retainReleases:
+                typeof input.retainReleases === "number" && Number.isFinite(input.retainReleases)
+                  ? input.retainReleases
+                  : undefined
+            }
+          })
+      ),
+    outpost_send_command: async (input) => {
+      if (!outposts) {
+        throw new Error("Outpost runtime is unavailable in this context.");
+      }
+      const peerId = stringInput(input, "peerId");
+      const command = parseOutpostCommand(input.command);
+      return runRecordedTool(
+        toolNameForOutpostCommand(command),
+        `AI Operator: ${command.type} ${peerId}`,
+        peerId,
+        { peerId, command },
+        async () => ({
+          envelope: outposts.sendCommand(peerId, command),
+          beacon: outposts.snapshot()
+        })
+      );
+    },
     host_inspect_local: async () =>
       runRecordedTool(
         "host.inspect_local",
@@ -671,6 +788,11 @@ function openRouterToolKit(): {
   return { definitions, handlers };
 }
 
+async function currentOutpostInventory(outposts?: AiOutpostRuntime): Promise<unknown> {
+  const state = await loadMothershipState();
+  return buildOutpostInventory(state, outposts?.snapshot());
+}
+
 async function runRecordedTool<TResult>(
   toolName: string,
   title: string,
@@ -706,6 +828,11 @@ function stringInput(input: Record<string, unknown>, key: string): string {
     throw new Error(`${key} is required`);
   }
   return value.trim();
+}
+
+function optionalStringInput(input: Record<string, unknown>, key: string): string | undefined {
+  const value = input[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function contentToString(content: unknown): string {

@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import WebSocket from "ws";
-import { parseOutpostCommand, type OutpostCommand } from "@outpost/protocol";
+import { parseOutpostCommand } from "@outpost/protocol";
 import { listDeploymentRecipes, recommendDeploymentRecipes } from "@outpost/shared";
 import {
   askAiAgent,
@@ -13,6 +13,7 @@ import {
 import { listBootstrapOperations, startBootstrap } from "./bootstrap.js";
 import { MothershipBeaconHub } from "./beaconClient.js";
 import { getAgentMemorySnapshot } from "./memory.js";
+import { buildOutpostInventory, toolNameForOutpostCommand } from "./outposts.js";
 import {
   appendOperationEvent,
   finishOperation,
@@ -340,7 +341,11 @@ export async function startMothershipServer(
           response,
           await askAiAgent({
             message: typeof body.message === "string" ? body.message : "",
-            allowPluginWrite: body.allowPluginWrite === true
+            allowPluginWrite: body.allowPluginWrite === true,
+            outposts: {
+              snapshot: () => beacon.snapshot(),
+              sendCommand: (peerId, command) => beacon.sendCommand(peerId, command)
+            }
           })
         );
         return;
@@ -367,7 +372,14 @@ export async function startMothershipServer(
           }
 
           const { askAiAgentStreamed } = await import("./ai.js");
-          const stream = askAiAgentStreamed({ message, allowPluginWrite });
+          const stream = askAiAgentStreamed({
+            message,
+            allowPluginWrite,
+            outposts: {
+              snapshot: () => beacon.snapshot(),
+              sendCommand: (peerId, command) => beacon.sendCommand(peerId, command)
+            }
+          });
 
           for await (const event of stream) {
             response.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -447,26 +459,6 @@ export async function startMothershipServer(
   };
 }
 
-function toolNameForOutpostCommand(command: OutpostCommand): string {
-  switch (command.type) {
-    case "DEPLOY":
-      return "outpost.deploy";
-    case "ROLLBACK":
-      return "outpost.rollback";
-    case "SET_ENV":
-      return "outpost.set_env";
-    case "APPLY_RECIPE":
-      return "outpost.apply_recipe";
-    case "DOCTOR":
-      return "outpost.doctor";
-    case "DETECT_APP":
-    case "RUN_HEALTH_CHECK":
-    case "PING":
-    case "GET_STATE":
-      return "outpost.inspect";
-  }
-}
-
 async function approveStoredOperation(
   operation: MothershipOperation,
   beacon: MothershipBeaconHub
@@ -534,6 +526,29 @@ async function approveStoredOperation(
       const input = asRecord(operation.input);
       const requestInput = parseBootstrapRequest(input);
       return runApprovedStoredOperation(operation, () => startBootstrap(requestInput));
+    }
+    case "outpost.list":
+      return runApprovedStoredOperation(operation, async () =>
+        buildOutpostInventory(await loadMothershipState(), beacon.snapshot())
+      );
+    case "outpost.create_pairing": {
+      const input = asRecord(operation.input);
+      return runApprovedStoredOperation(operation, () =>
+        createPairingCommand({
+          beaconUrl: optionalString(input, "beaconUrl"),
+          displayName: optionalString(input, "displayName"),
+          buildHints: {
+            installCommand: optionalString(input, "installCommand"),
+            buildCommand: optionalString(input, "buildCommand"),
+            outputDir: optionalString(input, "outputDir"),
+            projectName: optionalString(input, "projectName"),
+            retainReleases:
+              typeof input.retainReleases === "number" && Number.isFinite(input.retainReleases)
+                ? input.retainReleases
+                : undefined
+          }
+        })
+      );
     }
     case "outpost.inspect":
     case "outpost.doctor":
@@ -778,6 +793,11 @@ function indexHtml(): string {
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      transition: width 0.22s ease;
+      overflow: hidden;
+    }
+    .sidebar.collapsed {
+      width: 46px;
     }
     .sidebar-header {
       padding: 16px 20px;
@@ -785,6 +805,31 @@ function indexHtml(): string {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 10px;
+    }
+    .sidebar.collapsed .sidebar-header {
+      padding: 8px 6px;
+      justify-content: center;
+    }
+    .sidebar.collapsed .brand,
+    .sidebar.collapsed .sidebar-tabs,
+    .sidebar.collapsed .sidebar-content,
+    .sidebar.collapsed #beacon-pill {
+      display: none;
+    }
+    .sidebar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .setup-toggle {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border-radius: 6px;
+      font-size: 10px;
+      line-height: 1;
     }
     .brand {
       display: flex;
@@ -1234,6 +1279,7 @@ function indexHtml(): string {
     }
     .chat-workspace {
       flex-grow: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       height: 100%;
@@ -1285,6 +1331,7 @@ function indexHtml(): string {
     }
     .chat-messages {
       flex-grow: 1;
+      min-width: 0;
       overflow-y: auto;
       padding: 20px;
       display: flex;
@@ -1295,6 +1342,7 @@ function indexHtml(): string {
       display: flex;
       flex-direction: column;
       max-width: 80%;
+      min-width: 0;
       animation: fadeIn 0.25s ease-out;
     }
     .message-wrapper.user {
@@ -1323,6 +1371,9 @@ function indexHtml(): string {
       border-radius: 12px;
       font-size: 13px;
       line-height: 1.45;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .message-wrapper.user .message-bubble {
       background: linear-gradient(135deg, #10b981, #059669);
@@ -1433,6 +1484,7 @@ function indexHtml(): string {
     }
     .chat-input-row textarea {
       flex-grow: 1;
+      min-width: 0;
       height: 42px;
       min-height: 42px;
       max-height: 100px;
@@ -1646,13 +1698,14 @@ function indexHtml(): string {
     @media (max-width: 900px) {
       .app-container { flex-direction: column; overflow: auto; }
       .sidebar { width: 100%; height: auto; border-right: 0; border-bottom: 1px solid var(--border-color); }
+      .sidebar.collapsed { width: 100%; height: 42px; }
       .chat-workspace { height: calc(100vh - 400px); min-height: 480px; }
     }
   </style>
 </head>
 <body>
   <div class="app-container">
-    <aside class="sidebar">
+    <aside id="setup-panel" class="sidebar">
       <div class="sidebar-header">
         <div class="brand">
           <svg class="brand-logo" viewBox="0 0 24 24">
@@ -1663,8 +1716,11 @@ function indexHtml(): string {
             <div class="subtitle">Local Control Plane</div>
           </div>
         </div>
-        <div>
+        <div class="sidebar-actions">
           <span id="beacon-pill" class="status-badge">Beacon</span>
+          <button class="btn-secondary setup-toggle" onclick="toggleSetupPanel()" title="Collapse setup panel">
+            <span id="setup-toggle-icon">◀</span>
+          </button>
         </div>
       </div>
       <nav class="sidebar-tabs">
@@ -1852,6 +1908,7 @@ function indexHtml(): string {
     let lastRenderedStateHash = '';
     let isRefreshing = false;
     let pendingRefresh = false;
+    let setupPanelCollapsed = localStorage.getItem('outpost_setup_panel_collapsed') === 'true';
 
     // Load Chat History
     try {
@@ -1950,6 +2007,24 @@ function indexHtml(): string {
         drawer.classList.add('expanded');
         icon.textContent = '▼';
       }
+    }
+
+    function applySetupPanelState() {
+      const panel = document.getElementById('setup-panel');
+      const icon = document.getElementById('setup-toggle-icon');
+      const button = icon ? icon.closest('button') : null;
+      if (!panel) return;
+      panel.classList.toggle('collapsed', setupPanelCollapsed);
+      if (icon) icon.textContent = setupPanelCollapsed ? '▶' : '◀';
+      if (button) {
+        button.title = setupPanelCollapsed ? 'Expand setup panel' : 'Collapse setup panel';
+      }
+    }
+
+    function toggleSetupPanel() {
+      setupPanelCollapsed = !setupPanelCollapsed;
+      localStorage.setItem('outpost_setup_panel_collapsed', setupPanelCollapsed ? 'true' : 'false');
+      applySetupPanelState();
     }
 
     function applySuggestion(text) {
@@ -2764,6 +2839,7 @@ function indexHtml(): string {
     });
 
     // Boot
+    applySetupPanelState();
     renderChat();
     refresh();
     setInterval(refresh, 5000);

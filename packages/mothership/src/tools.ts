@@ -184,6 +184,39 @@ export const toolCatalog: ToolDefinition[] = [
     destructive: false
   },
   {
+    name: "outpost.list",
+    description: "List paired Outposts, live Beacon connectivity, online peers, and recent Outpost activity.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object" },
+    authorityLevel: "read",
+    targetScope: "beacon_strict",
+    mutatesLocalState: false,
+    mutatesRemoteState: false,
+    destructive: false
+  },
+  {
+    name: "outpost.create_pairing",
+    description: "Create a pairing setup command for adding or configuring an Outpost.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        beaconUrl: { type: "string" },
+        displayName: { type: "string" },
+        installCommand: { type: "string" },
+        buildCommand: { type: "string" },
+        outputDir: { type: "string" },
+        projectName: { type: "string" },
+        retainReleases: { type: "number" }
+      }
+    },
+    outputSchema: { type: "object" },
+    authorityLevel: "read",
+    targetScope: "mothership",
+    mutatesLocalState: false,
+    mutatesRemoteState: false,
+    destructive: false
+  },
+  {
     name: "outpost.inspect",
     description:
       "Ask a Beacon strict-mode Outpost for connectivity, state, app detection, or health information.",

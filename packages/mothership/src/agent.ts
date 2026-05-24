@@ -1,4 +1,5 @@
 import { Agent, OpenAIProvider, Runner, setTracingDisabled, tool } from "@openai/agents";
+import { parseOutpostCommand } from "@outpost/protocol";
 import { z } from "zod";
 import { listDeploymentRecipes, recommendDeploymentRecipes } from "@outpost/shared";
 import { readProviderApiKey, getAiStatus } from "./ai.js";
@@ -12,6 +13,12 @@ import {
 } from "./provisioning.js";
 import { startBootstrap } from "./bootstrap.js";
 import { executeTool } from "./tools.js";
+import { createPairingCommand, loadMothershipState } from "./state.js";
+import {
+  buildOutpostInventory,
+  toolNameForOutpostCommand,
+  type AiOutpostRuntime
+} from "./outposts.js";
 
 const MAX_AGENT_TURNS = 500;
 
@@ -39,6 +46,7 @@ export type DeploymentAgentResult = {
 export async function runDeploymentAgent(input: {
   message: string;
   memoryContext?: string;
+  outposts?: AiOutpostRuntime;
 }): Promise<DeploymentAgentResult> {
   const status = await getAiStatus();
   if (status.provider !== "openai") {
@@ -65,6 +73,9 @@ export async function runDeploymentAgent(input: {
       "You are not a general coding assistant and must not propose source-code edits unless the user explicitly asks for code help outside deployment.",
       "Use the available Mothership tools for factual inspection before making deployment claims.",
       "If a needed capability is missing, name the missing tool or recipe instead of inventing hidden capabilities.",
+      "For questions about paired or connected Outposts, call outposts_list before answering.",
+      "Use outpost_send_command for typed Beacon/Outpost operations such as GET_STATE, PING, DOCTOR, DEPLOY, ROLLBACK, DETECT_APP, RUN_HEALTH_CHECK, and APPLY_RECIPE.",
+      "Use outpost_create_pairing to generate setup commands for adding or configuring Outposts.",
       "Beacon strict mode never permits arbitrary shell commands. Outpost actions must remain typed commands.",
       input.memoryContext
         ? input.memoryContext
@@ -72,6 +83,7 @@ export async function runDeploymentAgent(input: {
       "Keep responses concise and include the next concrete deployment step."
     ].join("\n"),
     tools: [
+      ...outpostAgentTools(input.outposts),
       inspectLocalHostTool,
       detectLocalAppTool,
       listRecipesTool,
@@ -107,6 +119,7 @@ export async function runDeploymentAgent(input: {
 export async function* runDeploymentAgentStreamed(input: {
   message: string;
   memoryContext?: string;
+  outposts?: AiOutpostRuntime;
 }): AsyncGenerator<AgentStreamEvent, DeploymentAgentResult, unknown> {
   const status = await getAiStatus();
   if (status.provider !== "openai") {
@@ -132,6 +145,9 @@ export async function* runDeploymentAgentStreamed(input: {
       "You are not a general coding assistant and must not propose source-code edits unless the user explicitly asks for code help outside deployment.",
       "Use the available Mothership tools for factual inspection before making deployment claims.",
       "If a needed capability is missing, name the missing tool or recipe instead of inventing hidden capabilities.",
+      "For questions about paired or connected Outposts, call outposts_list before answering.",
+      "Use outpost_send_command for typed Beacon/Outpost operations such as GET_STATE, PING, DOCTOR, DEPLOY, ROLLBACK, DETECT_APP, RUN_HEALTH_CHECK, and APPLY_RECIPE.",
+      "Use outpost_create_pairing to generate setup commands for adding or configuring Outposts.",
       "Beacon strict mode never permits arbitrary shell commands. Outpost actions must remain typed commands.",
       input.memoryContext
         ? input.memoryContext
@@ -139,6 +155,7 @@ export async function* runDeploymentAgentStreamed(input: {
       "Keep responses concise and include the next concrete deployment step."
     ].join("\n"),
     tools: [
+      ...outpostAgentTools(input.outposts),
       inspectLocalHostTool,
       detectLocalAppTool,
       listRecipesTool,
@@ -240,6 +257,94 @@ function usageSnapshot(usage: {
     totalTokens: usage.totalTokens,
     requests: usage.requests
   };
+}
+
+function outpostAgentTools(outposts?: AiOutpostRuntime) {
+  return [
+    tool({
+      name: "outposts_list",
+      description:
+        "List paired Outposts, live Beacon connectivity, online peers, last known status, recent command results, and recent build logs.",
+      parameters: z.object({}),
+      async execute() {
+        const execution = await executeTool({
+          toolName: "outpost.list",
+          title: "AI Operator: list Outposts",
+          target: "mothership",
+          toolInput: {},
+          source: "ai",
+          run: async () => {
+            const state = await loadMothershipState();
+            return buildOutpostInventory(state, outposts?.snapshot());
+          }
+        });
+        return JSON.stringify(execution.result ?? execution, null, 2);
+      }
+    }),
+    tool({
+      name: "outpost_create_pairing",
+      description:
+        "Create a setup command for adding or configuring an Outpost with optional build hints.",
+      parameters: z.object({
+        beaconUrl: z.string().optional(),
+        displayName: z.string().optional(),
+        installCommand: z.string().optional(),
+        buildCommand: z.string().optional(),
+        outputDir: z.string().optional(),
+        projectName: z.string().optional(),
+        retainReleases: z.number().int().positive().optional()
+      }),
+      async execute(input) {
+        const execution = await executeTool({
+          toolName: "outpost.create_pairing",
+          title: "AI Operator: create Outpost pairing command",
+          target: "mothership",
+          toolInput: input,
+          source: "ai",
+          run: async () =>
+            createPairingCommand({
+              beaconUrl: input.beaconUrl,
+              displayName: input.displayName,
+              buildHints: {
+                installCommand: input.installCommand,
+                buildCommand: input.buildCommand,
+                outputDir: input.outputDir,
+                projectName: input.projectName,
+                retainReleases: input.retainReleases
+              }
+            })
+        });
+        return JSON.stringify(execution.result ?? execution, null, 2);
+      }
+    }),
+    tool({
+      name: "outpost_send_command",
+      description:
+        "Send a typed command to a paired Outpost through Beacon. Commands include GET_STATE, PING, DOCTOR, DEPLOY, ROLLBACK, DETECT_APP, RUN_HEALTH_CHECK, and APPLY_RECIPE.",
+      parameters: z.object({
+        peerId: z.string(),
+        command: z.object({ type: z.string() }).catchall(z.unknown())
+      }),
+      async execute(input) {
+        if (!outposts) {
+          throw new Error("Outpost runtime is unavailable in this context.");
+        }
+        const command = parseOutpostCommand(input.command);
+        const execution = await executeTool({
+          toolName: toolNameForOutpostCommand(command),
+          title: `AI Operator: ${command.type} ${input.peerId}`,
+          target: input.peerId,
+          toolInput: { peerId: input.peerId, command },
+          source: "ai",
+          run: async () => ({
+            envelope: outposts.sendCommand(input.peerId, command),
+            beacon: outposts.snapshot()
+          })
+        });
+        return JSON.stringify(execution.result ?? execution, null, 2);
+      }
+    })
+  ];
 }
 
 const inspectLocalHostTool = tool({
