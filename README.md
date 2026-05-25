@@ -1,80 +1,59 @@
-<p align="center">
-  <br>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" width="620">
-    <source media="(prefers-color-scheme: light)" width="620">
-    <pre align="center">
+# Outpost
 
-        ██████╗ ██╗   ██╗████████╗██████╗  ██████╗ ███████╗████████╗
-       ██╔═══██╗██║   ██║╚══██╔══╝██╔══██╗██╔═══██╗██╔════╝╚══██╔══╝
-       ██║   ██║██║   ██║   ██║   ██████╔╝██║   ██║███████╗   ██║
-       ██║   ██║██║   ██║   ██║   ██╔═══╝ ██║   ██║╚════██║   ██║
-       ╚██████╔╝╚██████╔╝   ██║   ██║     ╚██████╔╝███████║   ██║
-        ╚═════╝  ╚═════╝    ╚═╝   ╚═╝      ╚═════╝ ╚══════╝   ╚═╝
-    
-  </picture>
-</p>
+```
+ ██████╗ ██╗   ██╗████████╗██████╗  ██████╗ ███████╗████████╗
+██╔═══██╗██║   ██║╚══██╔══╝██╔══██╗██╔═══██╗██╔════╝╚══██╔══╝
+██║   ██║██║   ██║   ██║   ██████╔╝██║   ██║███████╗   ██║
+██║   ██║██║   ██║   ██║   ██╔═══╝ ██║   ██║╚════██║   ██║
+╚██████╔╝╚██████╔╝   ██║   ██║     ╚██████╔╝███████║   ██║
+ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝      ╚═════╝ ╚══════╝   ╚═╝
+```
 
-<p align="center">
-  <strong>AI-first deployment harness for user-owned infrastructure</strong>
-</p>
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-<p align="center">
-  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js"></a>
-  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="v0.1.0">
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
-  <a href="#install"><img src="https://img.shields.io/badge/setup-npm%20install-orange" alt="setup"></a>
-</p>
+> **AI-first deployment harness for applications running on user-owned infrastructure.**
 
-<br>
-
----
-
-Outpost is a **deployment-specific** AI harness. Describe what you want deployed — Mothership plans the work, calls provisioning and deployment tools, streams status updates, asks for approval according to your settings, and records everything that happened.
+Outpost is a deployment-specific AI harness. Describe what you want deployed — Mothership plans the work, calls provisioning and deployment tools, streams status updates, asks for approval according to your settings, and records everything that happened.
 
 Think of it like Claude Code or Codex, but scoped exclusively to deployment. No arbitrary shell commands through the relay. No SaaS dependency. No secrets leaving your machine.
 
 ---
-
-<br>
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     subgraph local[" Your Machine "]
-        M["<b>Mothership</b><br/>AI Operator<br/>Dashboard &amp; Tools<br/>Approval Gate"]
+        M["Mothership<br/>AI Operator<br/>Dashboard & Tools<br/>Approval Gate"]
     end
 
     subgraph relay[" Relay Layer "]
-        B["<b>Beacon</b><br/>Blind WebSocket Relay<br/>No decryption<br/>No secret storage"]
+        B["Beacon<br/>Blind WebSocket Relay<br/>No decryption<br/>No secret storage"]
     end
 
     subgraph remote[" Target VPS "]
-        O["<b>Outpost Daemon</b><br/>Signed Commands Only<br/>Deploy &middot; Rollback<br/>Health Checks"]
+        O["Outpost Daemon<br/>Signed Commands Only<br/>Deploy / Rollback<br/>Health Checks"]
     end
 
-    M -->|"<i>typed commands<br/>signed envelopes</i>"| B
-    B -->|"<i>opaque forwarding</i>"| O
-    O -->|"<i>status &amp; health</i>"| B
-    B -->|"<i>status &amp; health</i>"| M
+    M -->|"typed commands<br/>signed envelopes"| B
+    B -->|"opaque forwarding"| O
+    O -->|"status & health"| B
+    B -->|"status & health"| M
 
     style local fill:#1a1a2e,stroke:#e94560,color:#eee
     style relay fill:#16213e,stroke:#0f3460,color:#eee
     style remote fill:#1a1a2e,stroke:#e94560,color:#eee
 ```
 
-<br>
-
 ### Three Moving Parts
 
 | Component | Role | Runs on |
-| :--- | :--- | :--- |
+|:----------|:-----|:--------|
 | **Mothership** | AI operator, dashboard, tool runner, approval gate, provider manager, operation history | Your machine |
 | **Beacon** | Blind WebSocket relay — forwards opaque messages, never decrypts or stores secrets | Any reachable server |
 | **Outpost Daemon** | Target-side agent — accepts only signed typed commands | Target VPS |
-
-<br>
 
 ---
 
@@ -82,10 +61,8 @@ flowchart LR
 
 Outpost operates in two distinct modes, bridged by an integrated SSH bootstrapper.
 
-<br>
-
 | | Local Host Mode | Beacon Strict Mode |
-| :--- | :--- | :--- |
+|:--|:----------------|:-------------------|
 | **Where Mothership runs** | On the managed host itself | On a separate machine |
 | **Communication** | Direct local access | Via Beacon WebSocket relay |
 | **Command surface** | Shell + tools (gated by approval) | Typed commands only |
@@ -93,13 +70,9 @@ Outpost operates in two distinct modes, bridged by an integrated SSH bootstrappe
 | **NAT traversal** | N/A | Handled by Beacon |
 | **Best for** | Single VPS, staging, dev boxes | Multi-target production, locked-down targets |
 
-<br>
-
 ### SSH Bootstrapper
 
 Mothership can connect to a remote VPS over SSH to inspect its OS, run bootstrap commands, configure runtimes, and install the Outpost daemon — all before the Beacon relay is running. Set `runtimeSource: "local"` to transfer and build sources on the target directly from the monorepo.
-
-<br>
 
 ---
 
@@ -138,14 +111,11 @@ PORT=4173 node packages/mothership/dist/cli.js start
 http://127.0.0.1:4173
 ```
 
-<br>
-
 > **Isolated development:** override `HOME` to keep state separate.
+>
 > ```bash
 > HOME=/tmp/outpost-mothership-home PORT=4173 node packages/mothership/dist/cli.js start
 > ```
-
-<br>
 
 ---
 
@@ -160,8 +130,6 @@ http://127.0.0.1:4173
 - **Operation History** — full audit log of provisioning and deployment runs
 - **Deploy / Rollback / Doctor / Health Check / Logs** — typed workflows
 
-<br>
-
 ---
 
 ## Approval Modes
@@ -169,15 +137,13 @@ http://127.0.0.1:4173
 Choose how much autonomy Mothership has. Default is **automatic**.
 
 | Mode | Behavior |
-| :--- | :--- |
+|:-----|:---------|
 | **Automatic** | Run deployment tools without prompting; record all tool calls |
 | **Confirm Risky** | Ask before destructive, security-sensitive, or broad infrastructure changes |
 | **Confirm External** | Ask before changing anything outside local state or the current app workspace |
 | **Manual** | Ask before each meaningful action |
 
 > Approval settings affect Mothership only. They do **not** weaken Beacon strict mode.
-
-<br>
 
 ---
 
@@ -186,46 +152,22 @@ Choose how much autonomy Mothership has. Default is **automatic**.
 Mothership requires at least one configured provider before any deployment operations.
 
 | Provider | Status |
-| :--- | :--- |
+|:---------|:-------|
 | OpenAI | Supported |
 | OpenRouter | Supported |
 
 Provider keys are stored in `~/.outpost/mothership/ai-secrets.json` and never leave Mothership.
 
-<br>
-
 ---
 
 ## Adding a Target
-
-<p align="center">
-  <br>
-  <picture>
-    <pre align="left">
-
-                 Local Host Mode                      Beacon Strict Mode
-
-     ┌──────────────────────┐              ┌──────────────┐    ┌──────────┐    ┌──────────────┐
-     │     Mothership       │              │  Mothership  │    │  Beacon  │    │   Outpost    │
-     │     Local VPS        │              │  Your Laptop │◄──►│  Relay   │◄──►│  Target VPS  │
-     │  ┌────────────────┐  │              │              │ WS │          │ WS │              │
-     │  │  shell access  │  │              └──────────────┘    └──────────┘    └──────────────┘
-     │  │  provisioning  │  │
-     │  │  systemd       │  │
-     │  │  nginx/caddy   │  │
-     │  └────────────────┘  │
-     └──────────────────────┘
-    </pre>
-  </picture>
-</p>
-
-<br>
 
 ### Local Host Mode
 
 Run Mothership directly on the target VPS. It can inspect and provision the host directly.
 
 Typical workflow:
+
 - Detect OS and package manager
 - Install or validate runtimes
 - Clone repositories, create app directories
@@ -246,9 +188,7 @@ Use when Mothership is not on the target host.
 
 **Allowed typed commands:** `GET_STATE` · `DOCTOR` · `DETECT_APP` · `DEPLOY` · `ROLLBACK` · `SET_ENV` · `RUN_HEALTH_CHECK` · `APPLY_RECIPE`
 
-> 🚫 Generic shell commands are **never** permitted through Beacon.
-
-<br>
+> Generic shell commands are **never** permitted through Beacon.
 
 ---
 
@@ -257,7 +197,7 @@ Use when Mothership is not on the target host.
 Apps are deployed through recipes — typed definitions for detection, provisioning, deployment, health checking, and rollback.
 
 | Recipe | Maturity |
-| :--- | :--- |
+|:-------|:---------|
 | Static / Vite apps | Most mature |
 | Generic static build outputs | Stable |
 | Node.js services (systemd) | Stable |
@@ -265,8 +205,6 @@ Apps are deployed through recipes — typed definitions for detection, provision
 | Docker / Docker Compose | Stable |
 
 Custom recipes are supported through the plugin system under `~/.outpost/mothership/plugins/`.
-
-<br>
 
 ---
 
@@ -278,19 +216,15 @@ Custom recipes are supported through the plugin system under `~/.outpost/mothers
 4. Checkout branch or commit (if specified)
 5. Run `installCommand` (if configured)
 6. Run `buildCommand`
-7. Copy `outputDir` → `.outpost/releases/<release-id>/`
-8. Atomically update `.outpost/live` → new release
+7. Copy `outputDir` -> `.outpost/releases/<release-id>/`
+8. Atomically update `.outpost/live` -> new release
 9. Prune old successful releases beyond `retainReleases`
-
-<br>
 
 ---
 
 ## Rollback
 
 Rollback switches `.outpost/live` to an existing release **without rebuilding**. Node services additionally restart the previous systemd unit. Every rollback is audited in operation history.
-
-<br>
 
 ---
 
@@ -315,8 +249,6 @@ Mothership stores all data under `~/.outpost/mothership/`:
 
 > AI secrets, tools, plugins, and operation history are local-only. They are **not** copied to Beacon or Outpost hosts.
 
-<br>
-
 ---
 
 ## Repository Layout
@@ -330,15 +262,13 @@ packages/
 └── daemon/        Target-side daemon and CLI
 ```
 
-<br>
-
 ---
 
 ## Development
 
 ```bash
 npm run typecheck      # Type-check all packages
-npm run build          # Build all packages (output → dist/)
+npm run build          # Build all packages (output -> dist/)
 npm run clean          # Clean build artifacts
 npm run lint           # Lint with ESLint
 npm run format         # Format with Prettier
@@ -356,15 +286,12 @@ PORT=4173 node packages/mothership/dist/cli.js start
 
 Then open **http://127.0.0.1:4173**
 
-<br>
-
 ---
 
 ## FAQ
 
 <details>
-<summary><b>Why Outpost over Claude Code for deployment?</b></summary>
-<br>
+<summary><strong>Why Outpost over Claude Code for deployment?</strong></summary>
 
 Claude Code is a general-purpose coding assistant. It can run shell commands over SSH, but has no structured deployment model — no typed commands, no signed envelopes, no approval gates keyed to operation risk, no blind relay for NAT traversal, and no rollback strategy.
 
@@ -375,18 +302,17 @@ A deployment-specific harness with bounded commands, health checks, and automati
 </details>
 
 <details>
-<summary><b>What makes Outpost different from other deployment tools?</b></summary>
-<br>
+<summary><strong>What makes Outpost different from other deployment tools?</strong></summary>
 
 Most tools are either fully manual (write your own scripts) or fully automated CI/CD (configure YAML, push). Outpost is **AI-first**: you describe what you want, the AI Operator plans it, calls tools, asks for approval per your settings, and streams status as it happens. It runs on your infrastructure with no SaaS dependency. All secrets, keys, and history stay local.
 
 </details>
 
 <details>
-<summary><b>Is Outpost safe for production?</b></summary>
-<br>
+<summary><strong>Is Outpost safe for production?</strong></summary>
 
 Outpost was designed with a production safety model from the start:
+
 - **Beacon strict mode** — no arbitrary shell on remote targets
 - **Typed, signed commands** — every Beacon-mode command is verified
 - **Automatic rollback** — failed deployments revert to last known-good release
@@ -398,54 +324,46 @@ Outpost is currently at **v0.1.0** and in active development. Exercise appropria
 </details>
 
 <details>
-<summary><b>What kinds of apps can Outpost deploy?</b></summary>
-<br>
+<summary><strong>What kinds of apps can Outpost deploy?</strong></summary>
 
 Recipes exist for static/Vite apps, Node.js services (with systemd), and Docker Compose apps. Broader recipe support is on the roadmap. Custom recipes available through the plugin system.
 
 </details>
 
 <details>
-<summary><b>What happens when a deployment fails?</b></summary>
-<br>
+<summary><strong>What happens when a deployment fails?</strong></summary>
 
 The previous working release stays active and the recipe's rollback strategy triggers. For static releases: `.outpost/live` symlink reverts. For Node services: symlink reverts and the previous service restarts. Failures appear in the operation history and AI Operator with full status context.
 
 </details>
 
 <details>
-<summary><b>Does Outpost need root access?</b></summary>
-<br>
+<summary><strong>Does Outpost need root access?</strong></summary>
 
 Not necessarily. In local host mode, Mothership can run provisioners needing elevated privileges (installing packages, writing systemd units, configuring web servers) — approval mode controls whether those run automatically. The Outpost daemon needs only the permissions required by the app it manages. Systemd units can install as user units under `~/.config/systemd/user/`.
 
 </details>
 
 <details>
-<summary><b>How does Outpost handle secrets?</b></summary>
-<br>
+<summary><strong>How does Outpost handle secrets?</strong></summary>
 
 Provider keys are stored in `~/.outpost/mothership/ai-secrets.json` and never leave Mothership. Beacon cannot decrypt payloads or store secrets. App environment variables are set via the `SET_ENV` typed command and redacted from logs and status messages.
 
 </details>
 
 <details>
-<summary><b>Can I use Outpost without an AI provider?</b></summary>
-<br>
+<summary><strong>Can I use Outpost without an AI provider?</strong></summary>
 
 No. Mothership gates deployment operations behind at least one configured and validated AI provider (OpenAI or OpenRouter). The AI Operator plans the work, selects tools, and drives the deployment flow.
 
 </details>
 
 <details>
-<summary><b>Can I mix Local Host Mode and Beacon Strict Mode?</b></summary>
-<br>
+<summary><strong>Can I mix Local Host Mode and Beacon Strict Mode?</strong></summary>
 
 Yes. You might run local host mode on a staging VPS and manage production VPSes through Beacon strict mode — all from the same Mothership instance.
 
 </details>
-
-<br>
 
 ---
 
@@ -457,10 +375,6 @@ Yes. You might run local host mode on a staging VPS and manage production VPSes 
 >
 > By using Outpost, you acknowledge that you are solely responsible for any outcomes resulting from its use.
 
-<br>
-
 ---
 
-<p align="center">
-  <sub>Built with TypeScript &middot; OpenAI &middot; OpenRouter &middot; WebSockets</sub>
-</p>
+_Built with TypeScript, OpenAI, OpenRouter, and WebSockets._
