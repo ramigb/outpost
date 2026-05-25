@@ -226,7 +226,9 @@ async function readToolQuotaState(): Promise<AgentToolQuotaState> {
   if (!(await pathExists(paths.toolQuota))) {
     return writeToolQuotaState(newToolQuotaState(now));
   }
-  const parsed = JSON.parse(await readFile(paths.toolQuota, "utf8")) as Partial<AgentToolQuotaState>;
+  const parsed = JSON.parse(
+    await readFile(paths.toolQuota, "utf8")
+  ) as Partial<AgentToolQuotaState>;
   const windowStartedAt =
     typeof parsed.windowStartedAt === "string" ? Date.parse(parsed.windowStartedAt) : Number.NaN;
   if (!Number.isFinite(windowStartedAt) || now - windowStartedAt >= AGENT_TOOL_CALL_WINDOW_MS) {

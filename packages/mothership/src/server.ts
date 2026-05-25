@@ -10,7 +10,7 @@ import {
   saveAiConfig,
   validateAiProvider
 } from "./ai.js";
-import { listBootstrapOperations, startBootstrap } from "./bootstrap.js";
+import { listBootstrapOperations, startBootstrap, type BootstrapRequest } from "./bootstrap.js";
 import { MothershipBeaconHub } from "./beaconClient.js";
 import { getAgentMemorySnapshot } from "./memory.js";
 import { buildOutpostInventory, toolNameForOutpostCommand } from "./outposts.js";
@@ -662,7 +662,7 @@ function optionalString(record: Record<string, unknown>, key: string): string | 
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function parseBootstrapRequest(body: Record<string, unknown>) {
+function parseBootstrapRequest(body: Record<string, unknown>): BootstrapRequest {
   return {
     sshTarget: typeof body.sshTarget === "string" ? body.sshTarget : "",
     repo: typeof body.repo === "string" ? body.repo : "",
@@ -694,7 +694,24 @@ function parseBootstrapRequest(body: Record<string, unknown>) {
       typeof body.retainReleases === "number" && Number.isFinite(body.retainReleases)
         ? body.retainReleases
         : undefined,
-    deploy: body.deploy === true
+    deploy: body.deploy === true,
+    runtimeSource:
+      body.runtimeSource === "local" || body.runtimeSource === "npm"
+        ? body.runtimeSource
+        : undefined,
+    localRuntimePath:
+      typeof body.localRuntimePath === "string" && body.localRuntimePath.trim()
+        ? body.localRuntimePath.trim()
+        : undefined,
+    remoteRuntimePath:
+      typeof body.remoteRuntimePath === "string" && body.remoteRuntimePath.trim()
+        ? body.remoteRuntimePath.trim()
+        : undefined,
+    startBeacon: body.startBeacon === true,
+    beaconPort:
+      typeof body.beaconPort === "number" && Number.isFinite(body.beaconPort)
+        ? body.beaconPort
+        : undefined
   };
 }
 

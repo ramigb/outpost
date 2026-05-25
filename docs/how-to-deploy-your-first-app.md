@@ -79,7 +79,7 @@ The AI Operator has access to a dedicated suite of remote host management tools:
 
 - **`host_inspect_ssh`**: Allows the AI to query target OS, installed runtimes, listening ports, and status.
 - **`host_run_ssh_command`**: Allows the AI to execute arbitrary command-line actions on the target over SSH, such as checking files, cloning repositories, installing dependencies, or starting/stopping system services.
-- **`mothership_bootstrap_vps`**: A combined high-level workflow that provisions necessary runtimes, clones the repository, configures daemon pairing, and triggers deployment automatically.
+- **`mothership_bootstrap_vps`**: A combined high-level workflow that provisions necessary runtimes, clones or copies the repository, optionally transfers the local Beacon and Outpost runtime sources, configures daemon pairing, starts services, and triggers deployment automatically.
 
 For example, you can tell the AI Operator:
 
@@ -87,7 +87,7 @@ For example, you can tell the AI Operator:
 
 ### Self-Healing Runtime Provisioning
 
-Mothership automatically runs checks on the remote host over SSH. If `git`, `node` (Node.js 20), or `docker` are missing on the target host, it will automatically install them using `sudo apt-get` before configuring the daemon, ensuring the remote host is ready. It will then generate keys, pair the daemon with Mothership via Beacon, and start the daemon.
+Mothership automatically runs checks on the remote host over SSH. If `git`, `node` (Node.js 20), or `docker` are missing on the target host, it will automatically install them using `sudo apt-get` before configuring the daemon, ensuring the remote host is ready. When a local Outpost monorepo is detected, it transfers that monorepo to the VPS by default, runs `npm install` and `npm run build`, and starts the daemon from that transferred build. Set `runtimeSource: "npm"` to force package installs instead. With `startBeacon: true`, it also starts the transferred Beacon package on the VPS.
 
 ---
 

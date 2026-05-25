@@ -513,7 +513,7 @@ const runSshCommandTool = tool({
 const bootstrapVpsTool = tool({
   name: "mothership_bootstrap_vps",
   description:
-    "Bootstrap a remote VPS host: provision node/docker, clone a git repo, pair Outpost, and optionally deploy.",
+    "Bootstrap a remote VPS host: provision node/docker, clone or copy an app repo, transfer/build the local Beacon and Outpost runtime when requested, pair Outpost, start services, and optionally deploy.",
   parameters: z.object({
     sshTarget: z.string().describe("SSH target as user@host or host"),
     repo: z.string().describe("Git repository URL to clone (remote URL or local path)"),
@@ -521,6 +521,23 @@ const bootstrapVpsTool = tool({
       .string()
       .optional()
       .describe("Remote project path on VPS. Defaults to outpost-apps/<repo-name>"),
+    runtimeSource: z
+      .enum(["local", "npm"])
+      .optional()
+      .describe("Use local to transfer this monorepo to the VPS, or npm to use package installs."),
+    localRuntimePath: z
+      .string()
+      .optional()
+      .describe("Local Outpost monorepo root to transfer. Auto-detected when omitted."),
+    remoteRuntimePath: z
+      .string()
+      .optional()
+      .describe("Remote path where the Outpost runtime bundle is extracted and built."),
+    startBeacon: z
+      .boolean()
+      .optional()
+      .describe("Start the transferred Beacon package on the remote VPS."),
+    beaconPort: z.number().optional().describe("Remote Beacon port. Defaults to 8787."),
     deploy: z.boolean().optional().describe("Whether to trigger automated deployment after setup")
   }),
   async execute(input) {

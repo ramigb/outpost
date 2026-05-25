@@ -6,7 +6,7 @@ import {
   recommendDeploymentRecipes,
   writeJsonFile
 } from "@outpost/shared";
-import { listBootstrapOperations, startBootstrap } from "./bootstrap.js";
+import { listBootstrapOperations, startBootstrap, type BootstrapRequest } from "./bootstrap.js";
 import {
   AgentToolQuotaExceededError,
   appendAgentMemory,
@@ -628,7 +628,7 @@ function openRouterToolKit(outposts?: AiOutpostRuntime): {
       function: {
         name: "mothership_bootstrap_vps",
         description:
-          "Bootstrap a remote VPS host: provision node/docker, clone a git repo, pair Outpost, and optionally deploy.",
+          "Bootstrap a remote VPS host: provision node/docker, clone or copy an app repo, transfer/build the local Beacon and Outpost runtime when requested, pair Outpost, start services, and optionally deploy.",
         parameters: {
           type: "object",
           required: ["sshTarget", "repo"],
@@ -636,7 +636,12 @@ function openRouterToolKit(outposts?: AiOutpostRuntime): {
             sshTarget: { type: "string" },
             repo: { type: "string" },
             projectPath: { type: "string" },
-            deploy: { type: "boolean" }
+            deploy: { type: "boolean" },
+            runtimeSource: { type: "string", enum: ["local", "npm"] },
+            localRuntimePath: { type: "string" },
+            remoteRuntimePath: { type: "string" },
+            startBeacon: { type: "boolean" },
+            beaconPort: { type: "number" }
           },
           additionalProperties: false
         }
@@ -774,7 +779,27 @@ function openRouterToolKit(outposts?: AiOutpostRuntime): {
       const repo = stringInput(input, "repo");
       const projectPath = typeof input.projectPath === "string" ? input.projectPath : undefined;
       const deploy = typeof input.deploy === "boolean" ? input.deploy : undefined;
-      const toolInput = { sshTarget, repo, projectPath, deploy };
+      const runtimeSource: BootstrapRequest["runtimeSource"] =
+        input.runtimeSource === "local" || input.runtimeSource === "npm"
+          ? input.runtimeSource
+          : undefined;
+      const localRuntimePath =
+        typeof input.localRuntimePath === "string" ? input.localRuntimePath : undefined;
+      const remoteRuntimePath =
+        typeof input.remoteRuntimePath === "string" ? input.remoteRuntimePath : undefined;
+      const startBeacon = typeof input.startBeacon === "boolean" ? input.startBeacon : undefined;
+      const beaconPort = typeof input.beaconPort === "number" ? input.beaconPort : undefined;
+      const toolInput = {
+        sshTarget,
+        repo,
+        projectPath,
+        deploy,
+        runtimeSource,
+        localRuntimePath,
+        remoteRuntimePath,
+        startBeacon,
+        beaconPort
+      };
       return runRecordedTool(
         "mothership.bootstrap_vps",
         `AI Operator: bootstrap VPS ${sshTarget}`,

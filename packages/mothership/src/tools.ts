@@ -173,7 +173,12 @@ export const toolCatalog: ToolDefinition[] = [
         sshTarget: { type: "string" },
         repo: { type: "string" },
         projectPath: { type: "string" },
-        deploy: { type: "boolean" }
+        deploy: { type: "boolean" },
+        runtimeSource: { type: "string", enum: ["local", "npm"] },
+        localRuntimePath: { type: "string" },
+        remoteRuntimePath: { type: "string" },
+        startBeacon: { type: "boolean" },
+        beaconPort: { type: "number" }
       }
     },
     outputSchema: { type: "object" },
@@ -185,7 +190,8 @@ export const toolCatalog: ToolDefinition[] = [
   },
   {
     name: "outpost.list",
-    description: "List paired Outposts, live Beacon connectivity, online peers, and recent Outpost activity.",
+    description:
+      "List paired Outposts, live Beacon connectivity, online peers, and recent Outpost activity.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     outputSchema: { type: "object" },
     authorityLevel: "read",
