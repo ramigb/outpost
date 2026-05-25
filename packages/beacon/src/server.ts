@@ -1,15 +1,48 @@
+/**
+ * @module @outpost/beacon/server
+ *
+ * Blind WebSocket relay that forwards opaque messages between Mothership
+ * and Outpost peers without inspecting or decrypting payloads.
+ *
+ * @remarks
+ * Beacon is intentionally dumb: it only validates registration, enforces a
+ * simple rate limit, and forwards messages.  It never stores secrets,
+ * decrypts envelopes, or interprets commands.
+ */
+
 import { createServer, type IncomingMessage } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { parseRelayClientMessage, type RelayServerMessage } from "@outpost/protocol";
 
+/**
+ * Internal record for a peer currently connected to this Beacon instance.
+ */
 type RegisteredConnection = {
+  /** Peer ID derived from the public key. */
   peerId: string;
+  /** Role in the relay network. */
   role: "mothership" | "outpost";
+  /** Underlying WebSocket instance. */
   socket: WebSocket;
+  /** Messages sent in the current 10-second window. */
   messageCount: number;
+  /** Start of the current rate-limit window. */
   windowStartedAt: number;
 };
 
+/**
+ * Starts the Beacon HTTP + WebSocket relay server.
+ *
+ * @param input - Optional port and host overrides.
+ * @returns A controller object with a `close()` method.
+ *
+ * @example
+ * ```ts
+ * const beacon = startBeaconServer({ port: 8787 });
+ * // later
+ * beacon.close();
+ * ```
+ */
 export function startBeaconServer(input: { port?: number; host?: string } = {}): {
   close: () => void;
 } {
@@ -111,6 +144,7 @@ function broadcastPeerState(
   }
 }
 
+/** Simple per-connection rate limiter: 200 messages per 10-second window. */
 function allowMessage(connection: RegisteredConnection): boolean {
   const now = Date.now();
   if (now - connection.windowStartedAt > 10_000) {

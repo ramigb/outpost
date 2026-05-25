@@ -1,26 +1,53 @@
+/**
+ * @module @outpost/shared/config
+ *
+ * Outpost configuration helpers: builder detection, package-manager inference,
+ * config load/save, and filesystem path conventions.
+ */
+
 import { hostname } from "node:os";
 import { basename, join, resolve } from "node:path";
 import type { OutpostState } from "@outpost/protocol";
 import { ensureDir, pathExists, readJsonFile, writeJsonFile, outpostDir } from "./fs.js";
 
+/**
+ * Detected or configured build-system settings.
+ */
 export type BuilderConfig = {
+  /** Build system identifier. */
   builder: "vite" | "custom";
+  /** Command to install dependencies, if any. */
   installCommand?: string;
+  /** Command to produce a production build. */
   buildCommand?: string;
+  /** Directory that contains build artifacts. */
   outputDir?: string;
 };
 
+/** Supported JavaScript package managers. */
 export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
+/**
+ * Full persisted Outpost configuration for a project.
+ */
 export type OutpostConfig = BuilderConfig & {
+  /** Human-readable project name. */
   projectName: string;
+  /** How many successful releases to keep on disk. */
   retainReleases: number;
+  /** WebSocket URL of the Beacon relay. */
   beaconUrl?: string;
+  /** Nonce used during the pairing handshake. */
   pairingNonce?: string;
+  /** Optional host label for display. */
   hostLabel?: string;
+  /** Command used to start a Node service in production. */
   startCommand?: string;
+  /** TCP port the service listens on. */
   port?: number;
+  /** URL to health-check after deployment. */
   healthUrl?: string;
+  /** Optional systemd unit configuration. */
   systemd?: {
     serviceName?: string;
     user?: string;
@@ -28,15 +55,27 @@ export type OutpostConfig = BuilderConfig & {
   };
 };
 
+/**
+ * Persisted daemon state snapshot.
+ */
 export type OutpostPersistedState = {
+  /** Current lifecycle state. */
   state: OutpostState;
+  /** Active release ID, if any. */
   currentReleaseId?: string;
+  /** Active branch, if any. */
   currentBranch?: string;
+  /** Active commit, if any. */
   currentCommit?: string;
+  /** Last recorded error message. */
   lastError?: string;
+  /** ISO-8601 timestamp of the last update. */
   updatedAt: string;
 };
 
+/**
+ * Default Vite builder configuration used as a fallback.
+ */
 export const defaultViteBuilder: BuilderConfig = {
   builder: "vite",
   installCommand: "npm install",
@@ -44,6 +83,12 @@ export const defaultViteBuilder: BuilderConfig = {
   outputDir: "dist"
 };
 
+/**
+ * Detects which package manager a project uses by looking for lockfiles.
+ *
+ * @param projectRoot - Directory to inspect. Defaults to `process.cwd()`.
+ * @returns Detected package manager, falling back to `"npm"`.
+ */
 export async function detectPackageManager(projectRoot = process.cwd()): Promise<PackageManager> {
   if (await pathExists(join(projectRoot, "pnpm-lock.yaml"))) {
     return "pnpm";
@@ -60,6 +105,12 @@ export async function detectPackageManager(projectRoot = process.cwd()): Promise
   return "npm";
 }
 
+/**
+ * Returns the conventional install and build commands for a package manager.
+ *
+ * @param packageManager - Package manager identifier.
+ * @returns Install and build command strings.
+ */
 export function commandsForPackageManager(
   packageManager: PackageManager
 ): Pick<BuilderConfig, "installCommand" | "buildCommand"> {
@@ -75,6 +126,12 @@ export function commandsForPackageManager(
   }
 }
 
+/**
+ * Returns all conventional `.outpost/` paths for a given project root.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @returns Absolute paths for config, state, logs, releases, live symlink, and keys.
+ */
 export function outpostPaths(projectRoot = process.cwd()) {
   const root = resolve(projectRoot);
   const base = outpostDir(root);
@@ -94,6 +151,12 @@ export function outpostPaths(projectRoot = process.cwd()) {
   };
 }
 
+/**
+ * Detects whether the project uses a supported builder.
+ *
+ * @param projectRoot - Directory to inspect.
+ * @returns Builder configuration, or `null` when no supported builder is found.
+ */
 export async function detectBuilder(projectRoot = process.cwd()): Promise<BuilderConfig | null> {
   const packageJsonPath = join(projectRoot, "package.json");
   if (await pathExists(packageJsonPath)) {
@@ -120,6 +183,13 @@ export async function detectBuilder(projectRoot = process.cwd()): Promise<Builde
   return null;
 }
 
+/**
+ * Creates a default Outpost configuration by auto-detecting the builder.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @returns A fully-populated configuration object.
+ * @throws Error when no supported builder is detected.
+ */
 export async function createDefaultOutpostConfig(
   projectRoot = process.cwd()
 ): Promise<OutpostConfig> {
@@ -137,14 +207,34 @@ export async function createDefaultOutpostConfig(
   };
 }
 
+/**
+ * Loads the persisted Outpost configuration from disk.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @returns Parsed {@link OutpostConfig}.
+ * @throws Error when the file is missing or unreadable.
+ */
 export async function loadOutpostConfig(projectRoot = process.cwd()): Promise<OutpostConfig> {
   return readJsonFile<OutpostConfig>(outpostPaths(projectRoot).config);
 }
 
+/**
+ * Saves an Outpost configuration to disk.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @param config - Configuration to persist.
+ */
 export async function saveOutpostConfig(projectRoot: string, config: OutpostConfig): Promise<void> {
   await writeJsonFile(outpostPaths(projectRoot).config, config);
 }
 
+/**
+ * Saves the Outpost daemon state to disk, automatically adding an `updatedAt` timestamp.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @param state - State fields to persist (excluding `updatedAt`).
+ * @returns The fully persisted state with timestamp.
+ */
 export async function saveOutpostState(
   projectRoot: string,
   state: Omit<OutpostPersistedState, "updatedAt">
@@ -154,6 +244,11 @@ export async function saveOutpostState(
   return persisted;
 }
 
+/**
+ * Creates the `.outpost/` directory structure if it does not yet exist.
+ *
+ * @param projectRoot - Directory of the managed project.
+ */
 export async function initializeOutpostDirectories(projectRoot = process.cwd()): Promise<void> {
   const paths = outpostPaths(projectRoot);
   await ensureDir(paths.base);

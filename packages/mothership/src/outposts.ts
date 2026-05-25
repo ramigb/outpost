@@ -1,12 +1,30 @@
+/**
+ * @module @outpost/mothership/outposts
+ *
+ * Outpost inventory helpers: maps {@link OutpostCommand} types to tool names
+ * and builds the serialisable inventory used by the AI agent and dashboard.
+ */
+
 import type { OutpostCommand } from "@outpost/protocol";
 import type { BeaconSnapshot } from "./beaconClient.js";
 import type { MothershipState } from "./state.js";
 
+/**
+ * Runtime handles passed to the AI agent so it can inspect and command
+ * paired Outposts.
+ */
 export type AiOutpostRuntime = {
   snapshot: () => BeaconSnapshot & { beacons?: BeaconSnapshot[] };
   sendCommand: (peerId: string, command: OutpostCommand) => unknown;
 };
 
+/**
+ * Maps an {@link OutpostCommand} type to its canonical tool name in the
+ * Mothership catalog.
+ *
+ * @param command - Typed Outpost command.
+ * @returns Dotted tool name.
+ */
 export function toolNameForOutpostCommand(command: OutpostCommand): string {
   switch (command.type) {
     case "DEPLOY":
@@ -27,6 +45,13 @@ export function toolNameForOutpostCommand(command: OutpostCommand): string {
   }
 }
 
+/**
+ * Builds a serialisable inventory of paired Outposts and Beacon state.
+ *
+ * @param state - Current Mothership state.
+ * @param beacon - Optional aggregated Beacon snapshot.
+ * @returns Inventory object suitable for JSON serialisation.
+ */
 export function buildOutpostInventory(
   state: MothershipState,
   beacon?: BeaconSnapshot & { beacons?: BeaconSnapshot[] }

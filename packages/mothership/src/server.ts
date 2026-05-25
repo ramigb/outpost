@@ -1,3 +1,12 @@
+/**
+ * @module @outpost/mothership/server
+ *
+ * Mothership HTTP dashboard and API server.  Serves the single-page control room,
+ * exposes REST endpoints for state, pairing, provisioning, AI chat, operations,
+ * plugins, and Outpost command dispatch, and coordinates with the Beacon relay
+ * via {@link MothershipBeaconHub}.
+ */
+
 import { createServer } from "node:http";
 import WebSocket from "ws";
 import { parseOutpostCommand } from "@outpost/protocol";
@@ -40,6 +49,19 @@ import {
 } from "./state.js";
 import { executeTool, listTools, type ToolRunContext } from "./tools.js";
 
+/**
+ * Starts the Mothership HTTP server and WebSocket beacon hub.
+ *
+ * @param input - Optional port and host overrides.
+ * @returns A controller with a `close()` method.
+ *
+ * @example
+ * ```ts
+ * const server = await startMothershipServer({ port: 4173 });
+ * // later
+ * server.close();
+ * ```
+ */
 export async function startMothershipServer(
   input: { port?: number; host?: string } = {}
 ): Promise<{ close: () => void }> {

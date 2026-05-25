@@ -1,4 +1,21 @@
-#!/usr/bin/env node
+/**
+ * @module @outpost/daemon/cli
+ *
+ * Command-line interface for the Outpost daemon.
+ *
+ * Supports `init`, `link`, `start`, `setup`, `doctor`, and `deploy` subcommands.
+ *
+ * @example
+ * ```bash
+ * outpost-daemon init
+ * outpost-daemon link --payload <base64>
+ * outpost-daemon start
+ * outpost-daemon setup --pair <token> --deploy
+ * outpost-daemon doctor
+ * outpost-daemon deploy --branch main
+ * ```
+ */
+
 import { linkOutpost } from "./link.js";
 import { initOutpost } from "./init.js";
 import { startDaemon } from "./daemon.js";
@@ -58,11 +75,13 @@ try {
   process.exitCode = 1;
 }
 
+/** Reads the value immediately following a CLI flag, or returns `undefined`. */
 function readFlag(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
   return index === -1 ? undefined : args[index + 1];
 }
 
+/** Reads a positive integer flag value. */
 function readNumberFlag(args: string[], flag: string): number | undefined {
   const value = readFlag(args, flag);
   if (value === undefined) {
@@ -75,6 +94,7 @@ function readNumberFlag(args: string[], flag: string): number | undefined {
   return number;
 }
 
+/** Returns `true` when the flag is present in the argument list. */
 function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
 }

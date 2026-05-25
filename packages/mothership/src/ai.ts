@@ -1,3 +1,13 @@
+/**
+ * @module @outpost/mothership/ai
+ *
+ * AI provider management and agent orchestration for Mothership.
+ *
+ * Handles OpenAI (via Agents SDK) and OpenRouter providers, configuration
+ * persistence, validation, streamed and non-streamed agent execution, and
+ * tool dispatch through the Mothership tool catalog.
+ */
+
 import { readFile } from "node:fs/promises";
 import { parseOutpostCommand } from "@outpost/protocol";
 import {
@@ -46,15 +56,24 @@ import OpenAI from "openai";
 import { OpenRouter } from "@openrouter/sdk";
 import type { AgentStreamEvent } from "./agent.js";
 
+/** Maximum tool-call turns allowed for OpenRouter agent sessions. */
 const MAX_OPENROUTER_TOOL_TURNS = 500;
 
+/** Re-export of agent stream event types. */
 export type StreamEvent = AgentStreamEvent;
 
+/** Shape of persisted AI secrets file. */
 type AiSecrets = {
   apiKeys?: Partial<Record<MothershipAiConfig["provider"], string>>;
   apiKey?: string;
 };
 
+/**
+ * Saves or updates the AI provider configuration.
+ *
+ * @param input - New settings (API key, provider, base URL, model).
+ * @returns The persisted, normalised AI config.
+ */
 export async function saveAiConfig(input: {
   apiKey?: string;
   provider?: string;
@@ -93,11 +112,19 @@ export async function saveAiConfig(input: {
   return next;
 }
 
+/**
+ * Returns the current normalised AI configuration.
+ */
 export async function getAiStatus(): Promise<MothershipAiConfig> {
   const state = await loadMothershipState();
   return normalizeAiConfig(state.config.ai);
 }
 
+/**
+ * Validates the configured AI provider by listing models.
+ *
+ * @returns Updated AI config with `validationStatus` set to `valid` or `invalid`.
+ */
 export async function validateAiProvider(): Promise<MothershipAiConfig> {
   const state = await loadMothershipState();
   const current = normalizeAiConfig(state.config.ai);
@@ -145,6 +172,12 @@ export async function validateAiProvider(): Promise<MothershipAiConfig> {
   }
 }
 
+/**
+ * Throws when no validated AI provider is configured.
+ *
+ * @returns The valid AI config.
+ * @throws Error when the provider is missing or not validated.
+ */
 export async function assertHarnessProviderReady(): Promise<MothershipAiConfig> {
   const status = await getAiStatus();
   if (status.validationStatus !== "valid") {
@@ -155,6 +188,12 @@ export async function assertHarnessProviderReady(): Promise<MothershipAiConfig> 
   return status;
 }
 
+/**
+ * Sends a user message to the AI agent and returns its response.
+ *
+ * @param input - Message text and optional runtime handles.
+ * @returns Assistant message and optional plugin creation info.
+ */
 export async function askAiAgent(input: {
   message: string;
   allowPluginWrite?: boolean;
@@ -191,6 +230,12 @@ export async function askAiAgent(input: {
   return result;
 }
 
+/**
+ * Sends a user message to the AI agent and yields streamed events.
+ *
+ * @param input - Message text and optional runtime handles.
+ * @yields {@link StreamEvent} objects (thinking, tool_call, tool_result, message, done, error).
+ */
 export async function* askAiAgentStreamed(input: {
   message: string;
   allowPluginWrite?: boolean;
@@ -286,6 +331,8 @@ export async function* askAiAgentStreamed(input: {
   });
   return result ?? { message: "" };
 }
+
+// --- OpenRouter agent implementation (private) ---
 
 type OpenRouterAgentInput = {
   message: string;
@@ -895,12 +942,25 @@ function sumOptional(left: number | undefined, right: number | undefined): numbe
   return (left ?? 0) + (right ?? 0);
 }
 
+/**
+ * Reads the stored API key for a given provider.
+ *
+ * @param provider - AI provider identifier.
+ * @returns The API key string.
+ * @throws Error when the key is missing.
+ */
 export async function readProviderApiKey(
   provider: MothershipAiConfig["provider"]
 ): Promise<string> {
   return readApiKeyForProvider(provider);
 }
 
+/**
+ * Returns a minimal plugin template for the given name.
+ *
+ * @param input - Plugin name and optional description.
+ * @returns Template code string.
+ */
 export async function draftPlugin(input: {
   name: string;
   description?: string;

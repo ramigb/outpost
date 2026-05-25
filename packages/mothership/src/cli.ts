@@ -1,4 +1,14 @@
-#!/usr/bin/env node
+/**
+ * @module @outpost/mothership/cli
+ *
+ * Command-line entry point for the Mothership dashboard server.
+ *
+ * @example
+ * ```bash
+ * outpost-mothership start [--port <port>]
+ * ```
+ */
+
 import { startMothershipServer } from "./server.js";
 
 const command = process.argv[2] ?? "start";

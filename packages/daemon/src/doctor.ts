@@ -1,13 +1,32 @@
+/**
+ * @module @outpost/daemon/doctor
+ *
+ * Diagnostic checks for an Outpost project: validates Node.js version,
+ * git availability, repository state, configuration, and build output.
+ */
+
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { detectBuilder, loadOutpostConfig, outpostPaths, pathExists } from "@outpost/shared";
 
+/**
+ * Result of a single doctor check.
+ */
 export type DoctorCheck = {
+  /** Name of the check (e.g. `"git"`). */
   name: string;
+  /** Whether the check passed. */
   ok: boolean;
+  /** Human-readable message describing the result. */
   message: string;
 };
 
+/**
+ * Runs all doctor checks for a project.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @returns Array of check results.
+ */
 export async function runDoctor(projectRoot = process.cwd()): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
 
@@ -24,6 +43,12 @@ export async function runDoctor(projectRoot = process.cwd()): Promise<DoctorChec
   return checks;
 }
 
+/**
+ * Prints doctor check results to stdout and sets `process.exitCode = 1`
+ * when any check fails.
+ *
+ * @param checks - Results from {@link runDoctor}.
+ */
 export function printDoctor(checks: DoctorCheck[]): void {
   for (const check of checks) {
     console.log(`${check.ok ? "ok" : "fail"}  ${check.name}  ${check.message}`);

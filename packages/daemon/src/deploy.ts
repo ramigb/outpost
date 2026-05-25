@@ -1,3 +1,11 @@
+/**
+ * @module @outpost/daemon/deploy
+ *
+ * Deployment engine for the Outpost daemon.  Supports static builds,
+ * Node.js systemd services, and Docker Compose rollouts with automatic
+ * rollback on failure.
+ */
+
 import { execFile } from "node:child_process";
 import { readFile, mkdir, access, writeFile } from "node:fs/promises";
 import { join, basename } from "node:path";
@@ -21,16 +29,34 @@ import {
 } from "@outpost/shared";
 import { runHealthCheck } from "./strictCommands.js";
 
+/**
+ * Simple deployment request parameters.
+ */
 export type DeployRequest = {
+  /** Git branch to check out. */
   branch?: string;
+  /** Exact Git commit SHA to check out. */
   commit?: string;
 };
 
+/**
+ * Result of a successful deployment.
+ */
 export type DeployResult = {
+  /** Generated release identifier. */
   releaseId: string;
+  /** Short commit SHA that was deployed. */
   commit: string;
 };
 
+/**
+ * Deploys a static project: fetches git, installs, builds, copies output into
+ * a timestamped release directory, and atomically updates the live symlink.
+ *
+ * @param input - Deployment parameters.
+ * @returns The release ID and commit SHA.
+ * @throws Error when any step fails.
+ */
 export async function deployStaticProject(input: {
   projectRoot?: string;
   request: DeployRequest;
@@ -108,6 +134,13 @@ export async function deployStaticProject(input: {
   }
 }
 
+/**
+ * Rolls back the live symlink to a previous release and restarts any
+ * associated systemd service or Docker containers.
+ *
+ * @param input - Rollback parameters.
+ * @throws Error when the release does not exist.
+ */
 export async function rollbackRelease(input: {
   projectRoot?: string;
   releaseId: string;
@@ -164,6 +197,12 @@ export async function rollbackRelease(input: {
   });
 }
 
+/**
+ * Returns the short commit SHA of the current Git HEAD.
+ *
+ * @param projectRoot - Git working directory.
+ * @returns Short commit SHA, or `undefined` when not in a repository.
+ */
 export async function getCurrentCommit(projectRoot = process.cwd()): Promise<string | undefined> {
   return git(projectRoot, ["rev-parse", "--short", "HEAD"])
     .then((value) => value.trim())
@@ -223,6 +262,13 @@ async function emitBuildLog(input: {
   input.onLog?.(event);
 }
 
+/**
+ * Reads the pinned Mothership public key from the Outpost project directory.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @returns PEM public key string.
+ * @throws Error when the key file is missing.
+ */
 export async function readPinnedMothershipKey(projectRoot = process.cwd()): Promise<string> {
   return readFile(outpostPaths(projectRoot).mothershipPublicKey, "utf8");
 }
@@ -262,9 +308,7 @@ async function writeSystemdUnit(input: {
     unitPath = join(userDir, `${input.serviceName}.service`);
   }
 
-  // Generate env lines
   const envLines: string[] = [`Environment="PORT=${input.port}"`];
-  // Pass the current process's PATH so user-level node/npm can be found if installed via nvm/fnm
   if (process.env.PATH) {
     envLines.push(`Environment="PATH=${process.env.PATH}"`);
   }
@@ -317,6 +361,15 @@ function runCmd(cmd: string, args: string[]): Promise<string> {
   });
 }
 
+/**
+ * Deploys a Node.js service project: builds, publishes the release, writes a
+ * systemd unit, restarts the service, and runs a health check.  Automatically
+ * rolls back to the previous release if the health check fails.
+ *
+ * @param input - Service deployment parameters.
+ * @returns The release ID and commit SHA.
+ * @throws Error when deployment or health check fails.
+ */
 export async function deployServiceProject(input: {
   projectRoot?: string;
   request: DeployRequest;
@@ -343,7 +396,6 @@ export async function deployServiceProject(input: {
   const commandLog = (stream: "stdout" | "stderr", line: string) =>
     emitBuildLog({ paths, deploymentId, stream, line, onLog: input.onLog });
 
-  // Keep track of the active release before this deployment for rollback
   const releasesBefore = await listReleases(projectRoot);
   const stateFile = await readJsonFile<{ currentReleaseId?: string }>(paths.state).catch(
     () => undefined
@@ -390,7 +442,6 @@ export async function deployServiceProject(input: {
     };
 
     await systemLog(`Publishing release ${releaseId}`);
-    // Filter to exclude .git and .outpost directories
     const gitAndOutpostFilter = (src: string) => {
       const base = basename(src);
       return base !== ".git" && base !== ".outpost";
@@ -399,19 +450,18 @@ export async function deployServiceProject(input: {
     await publishRelease({
       projectRoot,
       releaseId,
-      outputDir: projectRoot, // Copy the entire projectRoot
+      outputDir: projectRoot,
       metadata,
       filter: gitAndOutpostFilter
     });
 
-    // Write or update systemd service unit
     const serviceName = input.systemd?.serviceName ?? `outpost-${config.projectName}`;
     await systemLog(`Configuring systemd service: ${serviceName}`);
     const { isSystem, unitPath } = await writeSystemdUnit({
       serviceName,
       projectName: config.projectName,
       user: input.systemd?.user,
-      workingDirectory: paths.live, // point working dir to the symlink!
+      workingDirectory: paths.live,
       startCommand: input.startCommand,
       port: input.port,
       env: {
@@ -426,7 +476,6 @@ export async function deployServiceProject(input: {
     await systemLog(`Starting/Restarting service ${serviceName}`);
     await reloadAndRestartService(serviceName, isSystem);
 
-    // Health check retries
     let healthOk = false;
     let healthMsg = "";
     const healthCheckUrl = input.healthUrl ?? `http://localhost:${input.port}/health`;
@@ -452,7 +501,6 @@ export async function deployServiceProject(input: {
     await systemLog(`Health check passed: ${healthMsg}`);
     await pruneReleases(projectRoot, config.retainReleases, releaseId);
 
-    // Save successful state
     await saveOutpostState(projectRoot, {
       state: "PAIRED_ONLINE",
       currentReleaseId: releaseId,
@@ -466,7 +514,6 @@ export async function deployServiceProject(input: {
     await systemLog(`Deployment failed: ${message}`);
     await saveOutpostState(projectRoot, { state: "ERROR", lastError: message });
 
-    // Rollback Boundary: if we have a previous successful release, automatically roll back!
     if (activeReleaseBefore) {
       await systemLog(`Triggering automatic rollback to previous release: ${activeReleaseBefore}`);
       try {
@@ -493,6 +540,15 @@ export async function deployServiceProject(input: {
   }
 }
 
+/**
+ * Deploys a Docker Compose project: builds, publishes the release, runs
+ * `docker compose up`, and health-checks the result.  Automatically rolls back
+ * on failure.
+ *
+ * @param input - Docker deployment parameters.
+ * @returns The release ID and commit SHA.
+ * @throws Error when deployment or health check fails.
+ */
 export async function deployDockerProject(input: {
   projectRoot?: string;
   request: DeployRequest;
@@ -561,7 +617,6 @@ export async function deployDockerProject(input: {
       filter: gitAndOutpostFilter
     });
 
-    // Detect which compose file exists in the live folder
     let composeFile = "docker-compose.yml";
     for (const name of [
       "docker-compose.yml",
@@ -579,7 +634,6 @@ export async function deployDockerProject(input: {
     await systemLog(`Running command: ${cmd}`);
     await runOrFail(cmd, paths.live, input.env, commandLog);
 
-    // Health check retries
     let healthOk = false;
     let healthMsg = "";
     const healthCheckUrl = input.healthUrl ?? `http://localhost:${input.port}/health`;
@@ -618,7 +672,6 @@ export async function deployDockerProject(input: {
     await systemLog(`Docker deployment failed: ${message}`);
     await saveOutpostState(projectRoot, { state: "ERROR", lastError: message });
 
-    // Rollback Boundary: restore previous compose rollout!
     if (activeReleaseBefore) {
       await systemLog(`Triggering automatic rollback to previous release: ${activeReleaseBefore}`);
       try {

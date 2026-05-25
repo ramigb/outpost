@@ -1,18 +1,45 @@
+/**
+ * @module @outpost/shared/recipes
+ *
+ * Deployment recipe definitions and helpers.  A recipe describes how to
+ * detect, provision, deploy, health-check, and roll back a category of
+ * applications.
+ */
+
+/**
+ * A deployment recipe describes the full lifecycle for a class of apps.
+ */
 export type DeploymentRecipe = {
+  /** Stable recipe identifier (e.g. `"static-vite"`). */
   id: string;
+  /** Human-readable name. */
   name: string;
+  /** App type tags this recipe matches against. */
   appTypes: string[];
+  /** Tools that must be available on the target host. */
   requiredTools: string[];
+  /** Ordered human-readable steps the recipe performs. */
   planSteps: string[];
+  /** How the recipe performs the deployment. */
   deployStrategy: "static_release" | "service_restart" | "container_rollout" | "custom";
+  /** How the recipe rolls back a failed or unwanted deployment. */
   rollbackStrategy: "symlink" | "previous_service_version" | "previous_image" | "manual";
+  /** Optional health-check configuration applied after deploy. */
   healthCheck?: {
     type: "http" | "tcp" | "command";
     target: string;
   };
+  /** Whether the recipe is fully implemented or still planned. */
   maturity: "implemented" | "planning";
 };
 
+/**
+ * Built-in deployment recipes supported by Outpost.
+ *
+ * @see `listDeploymentRecipes`
+ * @see `getDeploymentRecipe`
+ * @see `recommendDeploymentRecipes`
+ */
 export const deploymentRecipes: DeploymentRecipe[] = [
   {
     id: "static-vite",
@@ -79,10 +106,22 @@ export const deploymentRecipes: DeploymentRecipe[] = [
   }
 ];
 
+/**
+ * Returns all built-in deployment recipes.
+ *
+ * @returns Copy of the recipe catalog.
+ */
 export function listDeploymentRecipes(): DeploymentRecipe[] {
   return deploymentRecipes;
 }
 
+/**
+ * Retrieves a single recipe by ID.
+ *
+ * @param recipeId - Recipe identifier.
+ * @returns The matching recipe.
+ * @throws Error when the recipe does not exist.
+ */
 export function getDeploymentRecipe(recipeId: string): DeploymentRecipe {
   const recipe = deploymentRecipes.find((item) => item.id === recipeId);
   if (!recipe) {
@@ -91,6 +130,12 @@ export function getDeploymentRecipe(recipeId: string): DeploymentRecipe {
   return recipe;
 }
 
+/**
+ * Recommends recipes that match the given app type tags.
+ *
+ * @param appTypes - Detected app type identifiers.
+ * @returns Matching recipes in catalog order.
+ */
 export function recommendDeploymentRecipes(appTypes: string[]): DeploymentRecipe[] {
   const normalized = new Set(appTypes);
   return deploymentRecipes.filter((recipe) =>

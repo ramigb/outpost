@@ -1,3 +1,10 @@
+/**
+ * @module @outpost/daemon/recipes
+ *
+ * Recipe dispatch layer.  Translates an `APPLY_RECIPE` command into the
+ * appropriate concrete deploy function (static, service, or Docker).
+ */
+
 import type { BuildLogEvent, OutpostCommand } from "@outpost/protocol";
 import { getDeploymentRecipe, loadOutpostConfig } from "@outpost/shared";
 import {
@@ -7,15 +14,30 @@ import {
   type DeployResult
 } from "./deploy.js";
 
+/** Narrowed type for APPLY_RECIPE commands. */
 type ApplyRecipeCommand = Extract<OutpostCommand, { type: "APPLY_RECIPE" }>;
 
+/**
+ * Result of applying a deployment recipe.
+ */
 export type ApplyRecipeResult = {
+  /** Recipe that was executed. */
   recipeId: string;
+  /** Release ID produced by the deployment. */
   releaseId?: string;
+  /** Commit SHA that was deployed. */
   commit?: string;
+  /** Human-readable outcome message. */
   message: string;
 };
 
+/**
+ * Applies a deployment recipe by delegating to the correct deploy strategy.
+ *
+ * @param input - Recipe application parameters.
+ * @returns Result describing what was deployed.
+ * @throws Error when the recipe is not implemented or parameters are invalid.
+ */
 export async function applyDeploymentRecipe(input: {
   projectRoot: string;
   command: ApplyRecipeCommand;

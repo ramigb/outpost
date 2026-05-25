@@ -1,3 +1,14 @@
+/**
+ * @module @outpost/mothership/tools
+ *
+ * Mothership tool catalog, approval logic, and execution harness.
+ *
+ * Every operation that can affect local or remote state is modelled as a
+ * {@link ToolDefinition}.  The {@link executeTool} wrapper records the
+ * operation, checks approval settings, runs the tool, and persists the
+ * outcome to the local audit log.
+ */
+
 import {
   createOperation,
   appendOperationEvent,
@@ -9,29 +20,53 @@ import {
 import { consumeAgentToolCall } from "./memory.js";
 import { loadMothershipState, type ApprovalMode } from "./state.js";
 
+/**
+ * Metadata describing a Mothership capability exposed to the AI agent and dashboard.
+ */
 export type ToolDefinition = {
+  /** Dotted tool name (e.g. `outpost.deploy`). */
   name: string;
+  /** Human-readable description. */
   description: string;
+  /** JSON Schema for the tool's input. */
   inputSchema: Record<string, unknown>;
+  /** JSON Schema for the tool's output. */
   outputSchema: Record<string, unknown>;
+  /** Authority classification used by approval rules. */
   authorityLevel: "read" | "local_state" | "external_change" | "risky";
+  /** Target scope for the tool. */
   targetScope: "mothership" | "local_host" | "beacon_strict";
+  /** Whether the tool mutates Mothership's local state. */
   mutatesLocalState: boolean;
+  /** Whether the tool mutates remote infrastructure. */
   mutatesRemoteState: boolean;
+  /** Whether the tool is classified as destructive. */
   destructive: boolean;
 };
 
+/**
+ * Result of executing a tool through the approval gate.
+ */
 export type ToolExecutionResult<TResult> = {
+  /** Whether human approval is still required. */
   approvalRequired: boolean;
+  /** The created operation record. */
   operation: MothershipOperation;
+  /** Tool result, only present when approval was not required or was granted. */
   result?: TResult;
 };
 
+/**
+ * Context passed into every tool implementation so it can emit audit events.
+ */
 export type ToolRunContext = {
+  /** The operation being executed. */
   operation: MothershipOperation;
+  /** Emit an event that will be appended to the operation history. */
   emit: (event: Omit<OperationEvent, "operationId" | "timestamp">) => Promise<void>;
 };
 
+/** Full catalog of Mothership tools. */
 export const toolCatalog: ToolDefinition[] = [
   {
     name: "provider.validate",
@@ -329,10 +364,20 @@ export const toolCatalog: ToolDefinition[] = [
   }
 ];
 
+/**
+ * Returns the full tool catalog.
+ */
 export function listTools(): ToolDefinition[] {
   return toolCatalog;
 }
 
+/**
+ * Retrieves a single tool definition by name.
+ *
+ * @param name - Dotted tool name.
+ * @returns Matching tool definition.
+ * @throws Error when the tool does not exist.
+ */
 export function getTool(name: string): ToolDefinition {
   const tool = toolCatalog.find((item) => item.name === name);
   if (!tool) {
@@ -341,6 +386,14 @@ export function getTool(name: string): ToolDefinition {
   return tool;
 }
 
+/**
+ * Computes the approval decision for a tool under the current approval mode.
+ *
+ * @param tool - Tool being executed.
+ * @param mode - Current approval mode.
+ * @param approved - Whether the caller has already signalled approval.
+ * @returns An {@link OperationApproval} record.
+ */
 export function approvalForTool(
   tool: ToolDefinition,
   mode: ApprovalMode,
@@ -359,6 +412,13 @@ export function approvalForTool(
   };
 }
 
+/**
+ * Executes a tool through the approval gate and audit log.
+ *
+ * @param input - Tool execution request.
+ * @returns Result or pending-approval wrapper.
+ * @throws Error when the tool itself fails.
+ */
 export async function executeTool<TResult>(input: {
   toolName: string;
   title: string;

@@ -1,9 +1,23 @@
+/**
+ * @module @outpost/mothership/provisioning
+ *
+ * Local and remote host inspection, app detection, health checking, and
+ * deployment readiness planning.
+ *
+ * These are the concrete implementations behind the `host.inspect_local`,
+ * `host.inspect_ssh`, `app.detect_local`, `health.http_check`, and
+ * `provisioning.plan_local` tools.
+ */
+
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathExists, recommendDeploymentRecipes, type DeploymentRecipe } from "@outpost/shared";
 import type { ToolRunContext } from "./tools.js";
 
+/**
+ * Result of inspecting a host (local or remote over SSH).
+ */
 export type HostInspection = {
   target: string;
   inspectedAt: string;
@@ -27,12 +41,16 @@ export type HostInspection = {
   warnings: string[];
 };
 
+/** Availability info for a command-line tool. */
 export type ToolAvailability = {
   available: boolean;
   path?: string;
   version?: string;
 };
 
+/**
+ * Result of detecting app type signals in a local project.
+ */
 export type AppDetection = {
   projectPath: string;
   inspectedAt: string;
@@ -46,6 +64,9 @@ export type AppDetection = {
   warnings: string[];
 };
 
+/**
+ * Result of an HTTP health check.
+ */
 export type HttpHealthCheck = {
   url: string;
   ok: boolean;
@@ -54,6 +75,9 @@ export type HttpHealthCheck = {
   error?: string;
 };
 
+/**
+ * Combined readiness plan produced from host and app inspection.
+ */
 export type ProvisioningPlan = {
   target: string;
   projectPath: string;
@@ -69,6 +93,12 @@ export type ProvisioningPlan = {
   app: AppDetection;
 };
 
+/**
+ * Inspects the local machine for OS, runtimes, services, and ports.
+ *
+ * @param context - Optional tool run context for emitting progress events.
+ * @returns Host inspection result.
+ */
 export async function inspectLocalHost(context?: ToolRunContext): Promise<HostInspection> {
   await context?.emit({
     level: "info",
@@ -131,6 +161,14 @@ export async function inspectLocalHost(context?: ToolRunContext): Promise<HostIn
   return inspection;
 }
 
+/**
+ * Inspects a remote host over SSH using read-only shell probes.
+ *
+ * @param sshTarget - SSH destination (`user@host` or `host`).
+ * @param context - Optional tool run context.
+ * @returns Parsed host inspection result.
+ * @throws Error when the SSH connection or probe script fails.
+ */
 export async function inspectSshHost(
   sshTarget: string,
   context?: ToolRunContext
@@ -179,6 +217,14 @@ export async function inspectSshHost(
   return parseSshInspection(target, result.stdout);
 }
 
+/**
+ * Runs an arbitrary shell command on a remote host over SSH.
+ *
+ * @param sshTarget - SSH destination.
+ * @param command - Shell command to execute.
+ * @param context - Optional tool run context.
+ * @returns stdout, stderr, and exit code.
+ */
 export async function runSshCommand(
   sshTarget: string,
   command: string,
@@ -209,6 +255,13 @@ export async function runSshCommand(
   };
 }
 
+/**
+ * Detects app type signals in a local project directory.
+ *
+ * @param projectPath - Path to inspect.
+ * @param context - Optional tool run context.
+ * @returns App detection result.
+ */
 export async function detectLocalApp(
   projectPath: string,
   context?: ToolRunContext
@@ -267,6 +320,14 @@ export async function detectLocalApp(
   return detection;
 }
 
+/**
+ * Runs an HTTP GET request against a URL with an optional timeout.
+ *
+ * @param url - URL to check.
+ * @param timeoutMs - Request timeout. Defaults to 5000 ms.
+ * @param context - Optional tool run context.
+ * @returns Health check result.
+ */
 export async function runHttpHealthCheck(
   url: string,
   timeoutMs = 5_000,
@@ -302,6 +363,13 @@ export async function runHttpHealthCheck(
   }
 }
 
+/**
+ * Creates a deployment readiness plan from local host and app inspection.
+ *
+ * @param projectPath - Project to plan for.
+ * @param context - Optional tool run context.
+ * @returns Combined plan with missing capabilities and recommended steps.
+ */
 export async function createLocalProvisioningPlan(
   projectPath: string,
   context?: ToolRunContext

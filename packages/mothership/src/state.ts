@@ -1,3 +1,14 @@
+/**
+ * @module @outpost/mothership/state
+ *
+ * Mothership local state management: configuration, AI settings, approval modes,
+ * paired Outposts, signing keys, and pairing command generation.
+ *
+ * @remarks
+ * All data lives under `~/.outpost/mothership/` and never leaves the local
+ * machine.
+ */
+
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -16,18 +27,29 @@ import {
   writeJsonFile
 } from "@outpost/shared";
 
+/**
+ * Top-level Mothership configuration.
+ */
 export type MothershipConfig = {
+  /** Primary Beacon WebSocket URL. */
   beaconUrl: string;
+  /** All configured Beacons (primary + extras). */
   beacons?: MothershipBeaconConfig[];
+  /** AI provider settings. */
   ai?: MothershipAiConfig;
+  /** Approval gate configuration. */
   approvals?: MothershipApprovalConfig;
 };
 
+/** Beacon entry in the Mothership configuration. */
 export type MothershipBeaconConfig = {
   url: string;
   label?: string;
 };
 
+/**
+ * AI provider configuration persisted in Mothership state.
+ */
 export type MothershipAiConfig = {
   provider: "openai" | "openrouter";
   baseUrl: string;
@@ -38,12 +60,17 @@ export type MothershipAiConfig = {
   lastValidationError?: string;
 };
 
+/** Approval autonomy modes. */
 export type ApprovalMode = "automatic" | "confirm_risky" | "confirm_external_changes" | "manual";
 
+/** Approval gate configuration. */
 export type MothershipApprovalConfig = {
   mode: ApprovalMode;
 };
 
+/**
+ * Record of a paired Outpost daemon.
+ */
 export type PairedOutpost = {
   peerId: string;
   publicKeyPem?: string;
@@ -57,6 +84,9 @@ export type PairedOutpost = {
   updatedAt: string;
 };
 
+/**
+ * Full in-memory Mothership state snapshot.
+ */
 export type MothershipState = {
   config: MothershipConfig;
   outposts: PairedOutpost[];
@@ -65,6 +95,11 @@ export type MothershipState = {
   peerId: string;
 };
 
+/**
+ * Returns all conventional Mothership local state paths.
+ *
+ * @param base - Root directory. Defaults to `~/.outpost/mothership/`.
+ */
 export function mothershipPaths(base = join(homedir(), ".outpost", "mothership")) {
   return {
     base,
@@ -79,6 +114,11 @@ export function mothershipPaths(base = join(homedir(), ".outpost", "mothership")
   };
 }
 
+/**
+ * Loads or initialises the full Mothership state from disk.
+ *
+ * @returns Current state with keys, config, and outpost records.
+ */
 export async function loadMothershipState(): Promise<MothershipState> {
   const paths = mothershipPaths();
   await ensureDir(paths.base);
@@ -98,12 +138,24 @@ export async function loadMothershipState(): Promise<MothershipState> {
   };
 }
 
+/**
+ * Saves the Mothership configuration to disk after normalising it.
+ *
+ * @param config - Configuration to persist.
+ * @returns The normalised configuration.
+ */
 export async function saveMothershipConfig(config: MothershipConfig): Promise<MothershipConfig> {
   const normalized = normalizeMothershipConfig(config);
   await writeJsonFile(mothershipPaths().config, normalized);
   return normalized;
 }
 
+/**
+ * Generates a new pairing payload for an Outpost.
+ *
+ * @param input - Optional Beacon URL, display name, and build hints.
+ * @returns The payload, its base64 encoding, and the full CLI command to run on the target.
+ */
 export async function createPairingCommand(
   input: {
     beaconUrl?: string;
@@ -133,6 +185,12 @@ export async function createPairingCommand(
   };
 }
 
+/**
+ * Inserts or updates a paired Outpost record.
+ *
+ * @param outpost - Outpost fields (without `updatedAt`).
+ * @returns The persisted record with timestamp.
+ */
 export async function upsertOutpost(
   outpost: Omit<PairedOutpost, "updatedAt">
 ): Promise<PairedOutpost> {
@@ -149,6 +207,13 @@ export async function upsertOutpost(
   return next;
 }
 
+/**
+ * Normalises a Mothership configuration: deduplicates Beacons, ensures a
+ * primary URL, and normalises AI and approval sub-configs.
+ *
+ * @param config - Raw configuration.
+ * @returns Clean, normalised configuration.
+ */
 export function normalizeMothershipConfig(config: MothershipConfig): MothershipConfig {
   const fallback = config.beaconUrl || "ws://127.0.0.1:8787";
   const seen = new Set<string>();
@@ -166,6 +231,11 @@ export function normalizeMothershipConfig(config: MothershipConfig): MothershipC
   };
 }
 
+/**
+ * Returns the primary Beacon URL from a normalised configuration.
+ *
+ * @param config - Mothership configuration.
+ */
 export function primaryBeaconUrl(config: MothershipConfig): string {
   return normalizeMothershipConfig(config).beacons?.[0]?.url ?? config.beaconUrl;
 }
@@ -179,6 +249,12 @@ function defaultMothershipConfig(): MothershipConfig {
   };
 }
 
+/**
+ * Returns default AI configuration for a given provider.
+ *
+ * @param provider - AI provider identifier.
+ * @returns Default settings with `hasApiKey: false`.
+ */
 export function defaultAiConfig(
   provider: MothershipAiConfig["provider"] = "openai"
 ): MothershipAiConfig {
@@ -192,6 +268,13 @@ export function defaultAiConfig(
   };
 }
 
+/**
+ * Normalises partial AI configuration, handling legacy `model` field and
+ * deriving validation status from key presence.
+ *
+ * @param config - Partial or legacy AI config.
+ * @returns Fully normalised AI config.
+ */
 export function normalizeAiConfig(
   config?: Partial<MothershipAiConfig> & {
     enabled?: boolean;
@@ -222,6 +305,12 @@ export function normalizeAiConfig(
   };
 }
 
+/**
+ * Normalises approval configuration, falling back to `"automatic"`.
+ *
+ * @param config - Partial approval config.
+ * @returns Valid approval config.
+ */
 export function normalizeApprovalConfig(
   config?: Partial<MothershipApprovalConfig>
 ): MothershipApprovalConfig {

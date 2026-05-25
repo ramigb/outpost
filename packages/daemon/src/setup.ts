@@ -1,3 +1,10 @@
+/**
+ * @module @outpost/daemon/setup
+ *
+ * High-level setup orchestration: validates prerequisites, links the Outpost,
+ * optionally deploys, and optionally starts the daemon.
+ */
+
 import { execFile } from "node:child_process";
 import { basename } from "node:path";
 import { deployStaticProject } from "./deploy.js";
@@ -11,17 +18,30 @@ import {
   type OutpostConfig
 } from "@outpost/shared";
 
+/**
+ * Options accepted by the `setup` CLI command.
+ */
 export type SetupOptions = {
+  /** Base64-encoded pairing token from Mothership. */
   pair: string;
   installCommand?: string;
   buildCommand?: string;
   outputDir?: string;
   retainReleases?: number;
   projectName?: string;
+  /** Whether to trigger an immediate deploy after setup. */
   deploy?: boolean;
+  /** Whether to start the daemon after setup. Defaults to `true`. */
   startDaemon?: boolean;
 };
 
+/**
+ * Runs the full Outpost setup workflow.
+ *
+ * @param options - Setup parameters.
+ * @param projectRoot - Directory of the managed project.
+ * @throws Error when prerequisites are missing or setup fails.
+ */
 export async function setupOutpost(
   options: SetupOptions,
   projectRoot = process.cwd()
@@ -109,10 +129,12 @@ async function assertGitRepository(projectRoot: string): Promise<void> {
   }
 }
 
+/** Runs a git command in the given directory. */
 export async function runGit(projectRoot: string, args: string[]): Promise<string> {
   return run("git", args, projectRoot);
 }
 
+/** Checks whether the live symlink already exists. */
 export async function outpostLiveExists(projectRoot: string): Promise<boolean> {
   return pathExists(outpostPaths(projectRoot).live);
 }

@@ -1,6 +1,18 @@
+/**
+ * @module @outpost/mothership/operations
+ *
+ * Local audit log for every Mothership tool execution.
+ *
+ * Operations record their lifecycle (created → approval → running →
+ * success/failed) together with timestamped events and redacted inputs/outputs.
+ */
+
 import { pathExists, randomId, readJsonFile, writeJsonFile } from "@outpost/shared";
 import { mothershipPaths } from "./state.js";
 
+/**
+ * Single event appended to an operation's timeline.
+ */
 export type OperationEvent = {
   operationId: string;
   timestamp: string;
@@ -12,6 +24,9 @@ export type OperationEvent = {
   source?: "ai" | "system" | "user";
 };
 
+/**
+ * Approval decision for an operation.
+ */
 export type OperationApproval = {
   required: boolean;
   mode: string;
@@ -20,6 +35,9 @@ export type OperationApproval = {
   decidedAt?: string;
 };
 
+/**
+ * Full operation record persisted to disk.
+ */
 export type MothershipOperation = {
   id: string;
   status: "waiting_approval" | "running" | "success" | "failed";
@@ -36,6 +54,9 @@ export type MothershipOperation = {
   source?: "ai" | "system" | "user";
 };
 
+/**
+ * Lists all persisted operations, newest first.
+ */
 export async function listOperations(): Promise<MothershipOperation[]> {
   const path = mothershipPaths().operations;
   if (!(await pathExists(path))) {
@@ -44,6 +65,12 @@ export async function listOperations(): Promise<MothershipOperation[]> {
   return readJsonFile<MothershipOperation[]>(path);
 }
 
+/**
+ * Creates a new operation record and persists it.
+ *
+ * @param input - Operation creation parameters.
+ * @returns The created operation.
+ */
 export async function createOperation(input: {
   toolName: string;
   title: string;
@@ -68,6 +95,13 @@ export async function createOperation(input: {
   return operation;
 }
 
+/**
+ * Appends an event to an operation and persists the updated record.
+ *
+ * @param operation - Operation to update.
+ * @param event - Event fields (id and timestamp are added automatically).
+ * @returns Updated operation.
+ */
 export async function appendOperationEvent(
   operation: MothershipOperation,
   event: Omit<OperationEvent, "operationId" | "timestamp">
@@ -84,6 +118,13 @@ export async function appendOperationEvent(
   return operation;
 }
 
+/**
+ * Finalises an operation with a success or failure status.
+ *
+ * @param operation - Operation to finalise.
+ * @param input - Final status and optional result/error.
+ * @returns Updated operation.
+ */
 export async function finishOperation(
   operation: MothershipOperation,
   input: {
@@ -100,6 +141,12 @@ export async function finishOperation(
   return operation;
 }
 
+/**
+ * Marks a waiting operation as approved and updates its status to `"running"`.
+ *
+ * @param operation - Operation awaiting approval.
+ * @returns Updated operation.
+ */
 export async function markOperationApproved(
   operation: MothershipOperation
 ): Promise<MothershipOperation> {

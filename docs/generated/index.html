@@ -1,0 +1,363 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="./"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>Outpost API Documentation - v0.1.0</title><meta name="description" content="Documentation for Outpost API Documentation"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><a href="index.html" class="title">Outpost API Documentation - v0.1.0</a><div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/><ul role="listbox" id="tsd-search-results"></ul><div id="tsd-search-status" aria-live="polite" aria-atomic="true"><div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>Outpost API Documentation - v0.1.0</h1></div><div class="tsd-panel tsd-typography"><h1 id="outpost" class="tsd-anchor-link">Outpost<a href="#outpost" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<pre><code><span class="hl-0"> ██████╗ ██╗   ██╗████████╗██████╗  ██████╗ ███████╗████████╗</span><br/><span class="hl-0">██╔═══██╗██║   ██║╚══██╔══╝██╔══██╗██╔═══██╗██╔════╝╚══██╔══╝</span><br/><span class="hl-0">██║   ██║██║   ██║   ██║   ██████╔╝██║   ██║███████╗   ██║</span><br/><span class="hl-0">██║   ██║██║   ██║   ██║   ██╔═══╝ ██║   ██║╚════██║   ██║</span><br/><span class="hl-0">╚██████╔╝╚██████╔╝   ██║   ██║     ╚██████╔╝███████║   ██║</span><br/><span class="hl-0"> ╚═════╝  ╚═════╝    ╚═╝   ╚═╝      ╚═════╝ ╚══════╝   ╚═╝</span>
+</code><button>Copy</button></pre>
+
+<p><a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node.js"></a>
+<img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version">
+<img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="License"></p>
+<blockquote>
+<p><strong>AI-first deployment harness for applications running on user-owned infrastructure.</strong></p>
+</blockquote>
+<p>Outpost is a deployment-specific AI harness. Describe what you want deployed — Mothership plans the work, calls provisioning and deployment tools, streams status updates, asks for approval according to your settings, and records everything that happened.</p>
+<p>Think of it like Claude Code or Codex, but scoped exclusively to deployment. No arbitrary shell commands through the relay. No SaaS dependency. No secrets leaving your machine.</p>
+<hr>
+<h2 id="architecture" class="tsd-anchor-link">Architecture<a href="#architecture" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<pre><code class="mermaid">flowchart LR
+    subgraph local[" Your Machine "]
+        M["Mothership<br/>AI Operator<br/>Dashboard & Tools<br/>Approval Gate"]
+    end
+
+    subgraph relay[" Relay Layer "]
+        B["Beacon<br/>Blind WebSocket Relay<br/>No decryption<br/>No secret storage"]
+    end
+
+    subgraph remote[" Target VPS "]
+        O["Outpost Daemon<br/>Signed Commands Only<br/>Deploy / Rollback<br/>Health Checks"]
+    end
+
+    M -->|"typed commands<br/>signed envelopes"| B
+    B -->|"opaque forwarding"| O
+    O -->|"status & health"| B
+    B -->|"status & health"| M
+
+    style local fill:#1a1a2e,stroke:#e94560,color:#eee
+    style relay fill:#16213e,stroke:#0f3460,color:#eee
+    style remote fill:#1a1a2e,stroke:#e94560,color:#eee
+</code><button type="button">Copy</button></pre>
+
+<h3 id="three-moving-parts" class="tsd-anchor-link">Three Moving Parts<a href="#three-moving-parts" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Component</th>
+<th style="text-align:left">Role</th>
+<th style="text-align:left">Runs on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Mothership</strong></td>
+<td style="text-align:left">AI operator, dashboard, tool runner, approval gate, provider manager, operation history</td>
+<td style="text-align:left">Your machine</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Beacon</strong></td>
+<td style="text-align:left">Blind WebSocket relay — forwards opaque messages, never decrypts or stores secrets</td>
+<td style="text-align:left">Any reachable server</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Outpost Daemon</strong></td>
+<td style="text-align:left">Target-side agent — accepts only signed typed commands</td>
+<td style="text-align:left">Target VPS</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="authority-modes" class="tsd-anchor-link">Authority Modes<a href="#authority-modes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Outpost operates in two distinct modes, bridged by an integrated SSH bootstrapper.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left"></th>
+<th style="text-align:left">Local Host Mode</th>
+<th style="text-align:left">Beacon Strict Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Where Mothership runs</strong></td>
+<td style="text-align:left">On the managed host itself</td>
+<td style="text-align:left">On a separate machine</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Communication</strong></td>
+<td style="text-align:left">Direct local access</td>
+<td style="text-align:left">Via Beacon WebSocket relay</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Command surface</strong></td>
+<td style="text-align:left">Shell + tools (gated by approval)</td>
+<td style="text-align:left">Typed commands only</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Arbitrary shell</strong></td>
+<td style="text-align:left">Yes (subject to approval)</td>
+<td style="text-align:left">Never</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>NAT traversal</strong></td>
+<td style="text-align:left">N/A</td>
+<td style="text-align:left">Handled by Beacon</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Best for</strong></td>
+<td style="text-align:left">Single VPS, staging, dev boxes</td>
+<td style="text-align:left">Multi-target production, locked-down targets</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ssh-bootstrapper" class="tsd-anchor-link">SSH Bootstrapper<a href="#ssh-bootstrapper" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Mothership can connect to a remote VPS over SSH to inspect its OS, run bootstrap commands, configure runtimes, and install the Outpost daemon — all before the Beacon relay is running. Set <code>runtimeSource: &quot;local&quot;</code> to transfer and build sources on the target directly from the monorepo.</p>
+<hr>
+<h2 id="quick-start" class="tsd-anchor-link">Quick Start<a href="#quick-start" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="1-install" class="tsd-anchor-link">1. Install<a href="#1-install" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code class="bash"><span class="hl-1">git</span><span class="hl-0"> </span><span class="hl-2">clone</span><span class="hl-0"> </span><span class="hl-2">https://github.com/outpost/outpost</span><br/><span class="hl-1">cd</span><span class="hl-0"> </span><span class="hl-2">outpost</span><br/><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">install</span>
+</code><button type="button">Copy</button></pre>
+
+<h3 id="2-build" class="tsd-anchor-link">2. Build<a href="#2-build" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code class="bash"><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">typecheck</span><br/><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">build</span>
+</code><button type="button">Copy</button></pre>
+
+<h3 id="3-start-the-relay" class="tsd-anchor-link">3. Start the Relay<a href="#3-start-the-relay" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code class="bash"><span class="hl-1">node</span><span class="hl-0"> </span><span class="hl-2">packages/beacon/dist/cli.js</span><span class="hl-0"> </span><span class="hl-3">--port</span><span class="hl-0"> </span><span class="hl-4">8787</span>
+</code><button type="button">Copy</button></pre>
+
+<h3 id="4-start-mothership" class="tsd-anchor-link">4. Start Mothership<a href="#4-start-mothership" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code class="bash"><span class="hl-5">PORT</span><span class="hl-0">=</span><span class="hl-2">4173</span><span class="hl-0"> </span><span class="hl-1">node</span><span class="hl-0"> </span><span class="hl-2">packages/mothership/dist/cli.js</span><span class="hl-0"> </span><span class="hl-2">start</span>
+</code><button type="button">Copy</button></pre>
+
+<h3 id="5-open-the-dashboard" class="tsd-anchor-link">5. Open the Dashboard<a href="#5-open-the-dashboard" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<pre><code><span class="hl-6">http</span><span class="hl-0">:</span><span class="hl-7">//127.0.0.1:4173</span>
+</code><button>Copy</button></pre>
+
+<blockquote>
+<p><strong>Isolated development:</strong> override <code>HOME</code> to keep state separate.</p>
+<pre><code class="bash"><span class="hl-5">HOME</span><span class="hl-0">=</span><span class="hl-2">/tmp/outpost-mothership-home</span><span class="hl-0"> </span><span class="hl-5">PORT</span><span class="hl-0">=</span><span class="hl-2">4173</span><span class="hl-0"> </span><span class="hl-1">node</span><span class="hl-0"> </span><span class="hl-2">packages/mothership/dist/cli.js</span><span class="hl-0"> </span><span class="hl-2">start</span>
+</code><button type="button">Copy</button></pre>
+
+</blockquote>
+<hr>
+<h2 id="dashboard-capabilities" class="tsd-anchor-link">Dashboard Capabilities<a href="#dashboard-capabilities" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li><strong>AI Operator</strong> — deployment prompts, plans, tool calls, approvals, status updates</li>
+<li><strong>Provider Settings</strong> — OpenAI and OpenRouter configuration</li>
+<li><strong>Approval Modes</strong> — granular control over autonomous tool execution</li>
+<li><strong>Target Inventory</strong> — managed hosts and paired Outpost instances</li>
+<li><strong>App Inventory</strong> — deployed applications across targets</li>
+<li><strong>Beacon Pairing</strong> — generate pairing payloads for new targets</li>
+<li><strong>Operation History</strong> — full audit log of provisioning and deployment runs</li>
+<li><strong>Deploy / Rollback / Doctor / Health Check / Logs</strong> — typed workflows</li>
+</ul>
+<hr>
+<h2 id="approval-modes" class="tsd-anchor-link">Approval Modes<a href="#approval-modes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Choose how much autonomy Mothership has. Default is <strong>automatic</strong>.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Mode</th>
+<th style="text-align:left">Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Automatic</strong></td>
+<td style="text-align:left">Run deployment tools without prompting; record all tool calls</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Confirm Risky</strong></td>
+<td style="text-align:left">Ask before destructive, security-sensitive, or broad infrastructure changes</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Confirm External</strong></td>
+<td style="text-align:left">Ask before changing anything outside local state or the current app workspace</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Manual</strong></td>
+<td style="text-align:left">Ask before each meaningful action</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Approval settings affect Mothership only. They do <strong>not</strong> weaken Beacon strict mode.</p>
+</blockquote>
+<hr>
+<h2 id="ai-providers" class="tsd-anchor-link">AI Providers<a href="#ai-providers" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Mothership requires at least one configured provider before any deployment operations.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Provider</th>
+<th style="text-align:left">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">OpenAI</td>
+<td style="text-align:left">Supported</td>
+</tr>
+<tr>
+<td style="text-align:left">OpenRouter</td>
+<td style="text-align:left">Supported</td>
+</tr>
+</tbody>
+</table>
+<p>Provider keys are stored in <code>~/.outpost/mothership/ai-secrets.json</code> and never leave Mothership.</p>
+<hr>
+<h2 id="adding-a-target" class="tsd-anchor-link">Adding a Target<a href="#adding-a-target" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="local-host-mode" class="tsd-anchor-link">Local Host Mode<a href="#local-host-mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Run Mothership directly on the target VPS. It can inspect and provision the host directly.</p>
+<p>Typical workflow:</p>
+<ul>
+<li>Detect OS and package manager</li>
+<li>Install or validate runtimes</li>
+<li>Clone repositories, create app directories</li>
+<li>Write environment files and systemd services</li>
+<li>Configure nginx or Caddy</li>
+<li>Check firewall and TLS status</li>
+<li>Deploy and health check apps</li>
+</ul>
+<h3 id="beacon-strict-mode" class="tsd-anchor-link">Beacon Strict Mode<a href="#beacon-strict-mode" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>Use when Mothership is not on the target host.</p>
+<ol>
+<li>Mothership generates a pairing payload</li>
+<li>Outpost daemon is installed on the target</li>
+<li>Outpost pins Mothership's public key</li>
+<li>Outpost connects through Beacon</li>
+<li>Mothership sends <strong>only</strong> signed typed commands</li>
+</ol>
+<p><strong>Allowed typed commands:</strong> <code>GET_STATE</code> · <code>DOCTOR</code> · <code>DETECT_APP</code> · <code>DEPLOY</code> · <code>ROLLBACK</code> · <code>SET_ENV</code> · <code>RUN_HEALTH_CHECK</code> · <code>APPLY_RECIPE</code></p>
+<blockquote>
+<p>Generic shell commands are <strong>never</strong> permitted through Beacon.</p>
+</blockquote>
+<hr>
+<h2 id="deployment-recipes" class="tsd-anchor-link">Deployment Recipes<a href="#deployment-recipes" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Apps are deployed through recipes — typed definitions for detection, provisioning, deployment, health checking, and rollback.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Recipe</th>
+<th style="text-align:left">Maturity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">Static / Vite apps</td>
+<td style="text-align:left">Most mature</td>
+</tr>
+<tr>
+<td style="text-align:left">Generic static build outputs</td>
+<td style="text-align:left">Stable</td>
+</tr>
+<tr>
+<td style="text-align:left">Node.js services (systemd)</td>
+<td style="text-align:left">Stable</td>
+</tr>
+<tr>
+<td style="text-align:left">Server-rendered JavaScript apps</td>
+<td style="text-align:left">In progress</td>
+</tr>
+<tr>
+<td style="text-align:left">Docker / Docker Compose</td>
+<td style="text-align:left">Stable</td>
+</tr>
+</tbody>
+</table>
+<p>Custom recipes are supported through the plugin system under <code>~/.outpost/mothership/plugins/</code>.</p>
+<hr>
+<h2 id="deploy-flow-static" class="tsd-anchor-link">Deploy Flow (Static)<a href="#deploy-flow-static" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ol>
+<li>Verify the signed command</li>
+<li>Ensure clean git working tree</li>
+<li><code>git fetch --all --prune</code></li>
+<li>Checkout branch or commit (if specified)</li>
+<li>Run <code>installCommand</code> (if configured)</li>
+<li>Run <code>buildCommand</code></li>
+<li>Copy <code>outputDir</code> -&gt; <code>.outpost/releases/&lt;release-id&gt;/</code></li>
+<li>Atomically update <code>.outpost/live</code> -&gt; new release</li>
+<li>Prune old successful releases beyond <code>retainReleases</code></li>
+</ol>
+<hr>
+<h2 id="rollback" class="tsd-anchor-link">Rollback<a href="#rollback" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Rollback switches <code>.outpost/live</code> to an existing release <strong>without rebuilding</strong>. Node services additionally restart the previous systemd unit. Every rollback is audited in operation history.</p>
+<hr>
+<h2 id="local-state" class="tsd-anchor-link">Local State<a href="#local-state" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Mothership stores all data under <code>~/.outpost/mothership/</code>:</p>
+<pre><code><span class="hl-0">~/.</span><span class="hl-5">outpost</span><span class="hl-0">/</span><span class="hl-5">mothership</span><span class="hl-0">/</span><br/><span class="hl-0">├── </span><span class="hl-5">mothership_private</span><span class="hl-0">.</span><span class="hl-5">pem</span><br/><span class="hl-0">├── </span><span class="hl-5">mothership_public</span><span class="hl-0">.</span><span class="hl-5">pem</span><br/><span class="hl-0">├── </span><span class="hl-5">config</span><span class="hl-0">.</span><span class="hl-5">json</span><br/><span class="hl-0">├── </span><span class="hl-5">providers</span><span class="hl-0">.</span><span class="hl-5">json</span><br/><span class="hl-0">├── </span><span class="hl-5">ai</span><span class="hl-0">-</span><span class="hl-5">secrets</span><span class="hl-0">.</span><span class="hl-5">json</span><span class="hl-0">        ← </span><span class="hl-5">never</span><span class="hl-0"> </span><span class="hl-5">leaves</span><span class="hl-0"> </span><span class="hl-5">Mothership</span><br/><span class="hl-0">├── </span><span class="hl-5">approvals</span><span class="hl-0">.</span><span class="hl-5">json</span><br/><span class="hl-0">├── </span><span class="hl-5">targets</span><span class="hl-0">.</span><span class="hl-5">json</span><br/><span class="hl-0">├── </span><span class="hl-5">apps</span><span class="hl-0">.</span><span class="hl-5">json</span><br/><span class="hl-0">├── </span><span class="hl-5">operations</span><span class="hl-0">.</span><span class="hl-5">json</span><br/><span class="hl-0">├── </span><span class="hl-5">tools</span><span class="hl-0">/</span><br/><span class="hl-0">└── </span><span class="hl-5">plugins</span><span class="hl-0">/</span>
+</code><button>Copy</button></pre>
+
+<blockquote>
+<p>AI secrets, tools, plugins, and operation history are local-only. They are <strong>not</strong> copied to Beacon or Outpost hosts.</p>
+</blockquote>
+<hr>
+<h2 id="repository-layout" class="tsd-anchor-link">Repository Layout<a href="#repository-layout" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<pre><code><span class="hl-5">packages</span><span class="hl-0">/</span><br/><span class="hl-0">├── </span><span class="hl-5">protocol</span><span class="hl-0">/      </span><span class="hl-5">Shared</span><span class="hl-0"> </span><span class="hl-5">types</span><span class="hl-0"> </span><span class="hl-5">and</span><span class="hl-0"> </span><span class="hl-1">validators</span><span class="hl-0"> (</span><span class="hl-5">Zod</span><span class="hl-0">)</span><br/><span class="hl-0">├── </span><span class="hl-5">shared</span><span class="hl-0">/        </span><span class="hl-5">Crypto</span><span class="hl-0">, </span><span class="hl-5">config</span><span class="hl-0">, </span><span class="hl-5">filesystem</span><span class="hl-0">, </span><span class="hl-5">logging</span><span class="hl-0">, </span><span class="hl-5">release</span><span class="hl-0"> </span><span class="hl-5">helpers</span><br/><span class="hl-0">├── </span><span class="hl-5">beacon</span><span class="hl-0">/        </span><span class="hl-5">WebSocket</span><span class="hl-0"> </span><span class="hl-5">relay</span><span class="hl-0"> </span><span class="hl-5">server</span><br/><span class="hl-0">├── </span><span class="hl-5">mothership</span><span class="hl-0">/    </span><span class="hl-8">AI</span><span class="hl-0"> </span><span class="hl-5">operator</span><span class="hl-0">, </span><span class="hl-5">dashboard</span><span class="hl-0">, </span><span class="hl-5">providers</span><span class="hl-0">, </span><span class="hl-5">tools</span><span class="hl-0">, </span><span class="hl-5">approvals</span><br/><span class="hl-0">└── </span><span class="hl-5">daemon</span><span class="hl-0">/        </span><span class="hl-5">Target</span><span class="hl-0">-</span><span class="hl-5">side</span><span class="hl-0"> </span><span class="hl-5">daemon</span><span class="hl-0"> </span><span class="hl-5">and</span><span class="hl-0"> </span><span class="hl-8">CLI</span>
+</code><button>Copy</button></pre>
+
+<hr>
+<h2 id="development" class="tsd-anchor-link">Development<a href="#development" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<pre><code class="bash"><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">typecheck</span><span class="hl-0">      </span><span class="hl-7"># Type-check all packages</span><br/><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">build</span><span class="hl-0">          </span><span class="hl-7"># Build all packages (output -&gt; dist/)</span><br/><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">clean</span><span class="hl-0">          </span><span class="hl-7"># Clean build artifacts</span><br/><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">lint</span><span class="hl-0">           </span><span class="hl-7"># Lint with ESLint</span><br/><span class="hl-1">npm</span><span class="hl-0"> </span><span class="hl-2">run</span><span class="hl-0"> </span><span class="hl-2">format</span><span class="hl-0">         </span><span class="hl-7"># Format with Prettier</span>
+</code><button type="button">Copy</button></pre>
+
+<p>Run both Beacon and Mothership for development:</p>
+<pre><code class="bash"><span class="hl-7"># Terminal 1 — relay</span><br/><span class="hl-1">node</span><span class="hl-0"> </span><span class="hl-2">packages/beacon/dist/cli.js</span><span class="hl-0"> </span><span class="hl-3">--port</span><span class="hl-0"> </span><span class="hl-4">8787</span><br/><br/><span class="hl-7"># Terminal 2 — dashboard</span><br/><span class="hl-5">PORT</span><span class="hl-0">=</span><span class="hl-2">4173</span><span class="hl-0"> </span><span class="hl-1">node</span><span class="hl-0"> </span><span class="hl-2">packages/mothership/dist/cli.js</span><span class="hl-0"> </span><span class="hl-2">start</span>
+</code><button type="button">Copy</button></pre>
+
+<p>Then open <strong><a href="http://127.0.0.1:4173">http://127.0.0.1:4173</a></strong></p>
+<hr>
+<h2 id="faq" class="tsd-anchor-link">FAQ<a href="#faq" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<details>
+<summary><strong>Why Outpost over Claude Code for deployment?</strong></summary>
+<p>Claude Code is a general-purpose coding assistant. It can run shell commands over SSH, but has no structured deployment model — no typed commands, no signed envelopes, no approval gates keyed to operation risk, no blind relay for NAT traversal, and no rollback strategy.</p>
+<p>Outpost has a deployment-specific security model. In Beacon strict mode, the daemon accepts only typed commands (<code>DEPLOY</code>, <code>ROLLBACK</code>, <code>DOCTOR</code>, etc.). Every command is a signed envelope pinned to Mothership's public key. Beacon cannot decrypt or interpret payloads. Approval modes let you tune autonomy per operation category.</p>
+<p>A deployment-specific harness with bounded commands, health checks, and automatic rollback is safer than a general-purpose shell executor.</p>
+</details>
+<details>
+<summary><strong>What makes Outpost different from other deployment tools?</strong></summary>
+<p>Most tools are either fully manual (write your own scripts) or fully automated CI/CD (configure YAML, push). Outpost is <strong>AI-first</strong>: you describe what you want, the AI Operator plans it, calls tools, asks for approval per your settings, and streams status as it happens. It runs on your infrastructure with no SaaS dependency. All secrets, keys, and history stay local.</p>
+</details>
+<details>
+<summary><strong>Is Outpost safe for production?</strong></summary>
+<p>Outpost was designed with a production safety model from the start:</p>
+<ul>
+<li><strong>Beacon strict mode</strong> — no arbitrary shell on remote targets</li>
+<li><strong>Typed, signed commands</strong> — every Beacon-mode command is verified</li>
+<li><strong>Automatic rollback</strong> — failed deployments revert to last known-good release</li>
+<li><strong>Full audit trail</strong> — every operation is logged</li>
+<li><strong>Granular approvals</strong> — require human confirmation for destructive changes</li>
+</ul>
+<p>Outpost is currently at <strong>v0.1.0</strong> and in active development. Exercise appropriate caution.</p>
+</details>
+<details>
+<summary><strong>What kinds of apps can Outpost deploy?</strong></summary>
+<p>Recipes exist for static/Vite apps, Node.js services (with systemd), and Docker Compose apps. Broader recipe support is on the roadmap. Custom recipes available through the plugin system.</p>
+</details>
+<details>
+<summary><strong>What happens when a deployment fails?</strong></summary>
+<p>The previous working release stays active and the recipe's rollback strategy triggers. For static releases: <code>.outpost/live</code> symlink reverts. For Node services: symlink reverts and the previous service restarts. Failures appear in the operation history and AI Operator with full status context.</p>
+</details>
+<details>
+<summary><strong>Does Outpost need root access?</strong></summary>
+<p>Not necessarily. In local host mode, Mothership can run provisioners needing elevated privileges (installing packages, writing systemd units, configuring web servers) — approval mode controls whether those run automatically. The Outpost daemon needs only the permissions required by the app it manages. Systemd units can install as user units under <code>~/.config/systemd/user/</code>.</p>
+</details>
+<details>
+<summary><strong>How does Outpost handle secrets?</strong></summary>
+<p>Provider keys are stored in <code>~/.outpost/mothership/ai-secrets.json</code> and never leave Mothership. Beacon cannot decrypt payloads or store secrets. App environment variables are set via the <code>SET_ENV</code> typed command and redacted from logs and status messages.</p>
+</details>
+<details>
+<summary><strong>Can I use Outpost without an AI provider?</strong></summary>
+<p>No. Mothership gates deployment operations behind at least one configured and validated AI provider (OpenAI or OpenRouter). The AI Operator plans the work, selects tools, and drives the deployment flow.</p>
+</details>
+<details>
+<summary><strong>Can I mix Local Host Mode and Beacon Strict Mode?</strong></summary>
+<p>Yes. You might run local host mode on a staging VPS and manage production VPSes through Beacon strict mode — all from the same Mothership instance.</p>
+</details>
+<hr>
+<h2 id="disclaimer" class="tsd-anchor-link">Disclaimer<a href="#disclaimer" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<blockquote>
+<p><strong>This software is provided &quot;as is&quot;, without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement.</strong></p>
+<p>Do not use Outpost in production environments unless you fully understand what you are doing and have independently verified that it meets your security, reliability, and compliance requirements. The authors and contributors assume zero responsibility for any damages, data loss, service interruption, security incidents, or other consequences arising from the use of this software.</p>
+<p>By using Outpost, you acknowledge that you are solely responsible for any outcomes resulting from its use.</p>
+</blockquote>
+<hr>
+<p><em>Built with TypeScript, OpenAI, OpenRouter, and WebSockets.</em></p>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#outpost"><span>Outpost</span></a><ul><li><a href="#architecture"><span>Architecture</span></a></li><li><ul><li><a href="#three-moving-parts"><span>Three <wbr/>Moving <wbr/>Parts</span></a></li></ul></li><li><a href="#authority-modes"><span>Authority <wbr/>Modes</span></a></li><li><ul><li><a href="#ssh-bootstrapper"><span>SSH <wbr/>Bootstrapper</span></a></li></ul></li><li><a href="#quick-start"><span>Quick <wbr/>Start</span></a></li><li><ul><li><a href="#1-install"><span>1. <wbr/>Install</span></a></li><li><a href="#2-build"><span>2. <wbr/>Build</span></a></li><li><a href="#3-start-the-relay"><span>3. <wbr/>Start the <wbr/>Relay</span></a></li><li><a href="#4-start-mothership"><span>4. <wbr/>Start <wbr/>Mothership</span></a></li><li><a href="#5-open-the-dashboard"><span>5. <wbr/>Open the <wbr/>Dashboard</span></a></li></ul></li><li><a href="#dashboard-capabilities"><span>Dashboard <wbr/>Capabilities</span></a></li><li><a href="#approval-modes"><span>Approval <wbr/>Modes</span></a></li><li><a href="#ai-providers"><span>AI <wbr/>Providers</span></a></li><li><a href="#adding-a-target"><span>Adding a <wbr/>Target</span></a></li><li><ul><li><a href="#local-host-mode"><span>Local <wbr/>Host <wbr/>Mode</span></a></li><li><a href="#beacon-strict-mode"><span>Beacon <wbr/>Strict <wbr/>Mode</span></a></li></ul></li><li><a href="#deployment-recipes"><span>Deployment <wbr/>Recipes</span></a></li><li><a href="#deploy-flow-static"><span>Deploy <wbr/>Flow (<wbr/>Static)</span></a></li><li><a href="#rollback"><span>Rollback</span></a></li><li><a href="#local-state"><span>Local <wbr/>State</span></a></li><li><a href="#repository-layout"><span>Repository <wbr/>Layout</span></a></li><li><a href="#development"><span>Development</span></a></li><li><a href="#faq"><span>FAQ</span></a></li><li><a href="#disclaimer"><span>Disclaimer</span></a></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">Outpost API Documentation - v0.1.0</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>

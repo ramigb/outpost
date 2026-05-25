@@ -1,9 +1,20 @@
+/**
+ * @module @outpost/mothership/plugins
+ *
+ * Local plugin system for Mothership.  Plugins are small Node.js executables
+ * stored under `~/.outpost/mothership/plugins/` that can be invoked with JSON
+ * stdin and return JSON stdout.
+ */
+
 import { spawn } from "node:child_process";
 import { chmod, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ensureDir, pathExists } from "@outpost/shared";
 import { mothershipPaths } from "./state.js";
 
+/**
+ * Persisted plugin manifest.
+ */
 export type MothershipPlugin = {
   id: string;
   name: string;
@@ -13,6 +24,9 @@ export type MothershipPlugin = {
   updatedAt: string;
 };
 
+/**
+ * Result of executing a plugin.
+ */
 export type PluginRunResult = {
   pluginId: string;
   exitCode: number;
@@ -20,6 +34,9 @@ export type PluginRunResult = {
   stderr: string;
 };
 
+/**
+ * Lists all installed plugins sorted by name.
+ */
 export async function listPlugins(): Promise<MothershipPlugin[]> {
   const pluginsDir = mothershipPaths().plugins;
   if (!(await pathExists(pluginsDir))) {
@@ -39,6 +56,12 @@ export async function listPlugins(): Promise<MothershipPlugin[]> {
   return plugins.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Creates or updates a plugin.
+ *
+ * @param input - Plugin manifest fields and source code.
+ * @returns The persisted plugin manifest.
+ */
 export async function upsertPlugin(input: {
   id?: string;
   name: string;
@@ -67,6 +90,14 @@ export async function upsertPlugin(input: {
   return plugin;
 }
 
+/**
+ * Runs a plugin with the given JSON input.
+ *
+ * @param pluginId - Plugin identifier.
+ * @param input - JSON value written to the plugin's stdin.
+ * @returns Execution result including stdout, stderr, and exit code.
+ * @throws Error when the plugin is not found or fails to spawn.
+ */
 export async function runPlugin(pluginId: string, input: unknown): Promise<PluginRunResult> {
   const id = sanitizePluginId(pluginId);
   const plugin = (await listPlugins()).find((item) => item.id === id);
@@ -99,6 +130,12 @@ export async function runPlugin(pluginId: string, input: unknown): Promise<Plugi
   });
 }
 
+/**
+ * Returns a minimal plugin template that echoes its input.
+ *
+ * @param name - Plugin name.
+ * @returns Template JavaScript source code.
+ */
 export function pluginTemplate(name: string): string {
   return `#!/usr/bin/env node
 const chunks = [];

@@ -1,8 +1,24 @@
+/**
+ * @module @outpost/shared/logging
+ *
+ * Simple append-only log writer with automatic rotation when a size threshold
+ * is exceeded.
+ */
+
 import { appendFile, mkdir, stat, rename, truncate } from "node:fs/promises";
 import { dirname } from "node:path";
 
+/** Default maximum log file size before rotation: 50 MB. */
 const DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
 
+/**
+ * Appends a single line to a log file, rotating the file first if it has grown
+ * beyond `maxBytes`.
+ *
+ * @param path - Log file path.
+ * @param line - Raw text line (a trailing newline is added automatically).
+ * @param maxBytes - Size threshold before rotation. Defaults to 50 MB.
+ */
 export async function appendLogLine(
   path: string,
   line: string,

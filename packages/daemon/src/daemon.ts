@@ -1,3 +1,11 @@
+/**
+ * @module @outpost/daemon/daemon
+ *
+ * Core Outpost daemon engine: manages the persistent WebSocket connection
+ * to a Beacon relay, handles signed command dispatch, and coordinates
+ * deployment, rollback, health checks, and status reporting.
+ */
+
 import { readFile } from "node:fs/promises";
 import WebSocket from "ws";
 import {
@@ -28,6 +36,13 @@ import { runDoctor } from "./doctor.js";
 import { applyDeploymentRecipe } from "./recipes.js";
 import { detectApp, runHealthCheck } from "./strictCommands.js";
 
+/**
+ * Connects the Outpost daemon to its configured Beacon relay and begins
+ * processing signed commands from Mothership.
+ *
+ * @param projectRoot - Directory of the managed project. Defaults to `process.cwd()`.
+ * @throws Error when the Outpost has not been linked to a Beacon URL.
+ */
 export async function startDaemon(projectRoot = process.cwd()): Promise<void> {
   const paths = outpostPaths(projectRoot);
   const config = await loadOutpostConfig(projectRoot);

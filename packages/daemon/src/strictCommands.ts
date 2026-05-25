@@ -1,3 +1,14 @@
+/**
+ * @module @outpost/daemon/strictCommands
+ *
+ * Implementation of the read-only and safe typed commands that do not
+ * mutate remote infrastructure: app detection and HTTP health checks.
+ *
+ * @remarks
+ * These commands are allowed even when the daemon is marked `busy` because
+ * they are read-only and do not interfere with an in-progress deployment.
+ */
+
 import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import {
@@ -7,29 +18,60 @@ import {
   recommendDeploymentRecipes
 } from "@outpost/shared";
 
+/**
+ * Result of detecting application type signals in a project directory.
+ */
 export type DetectedApp = {
+  /** Absolute path that was inspected. */
   projectPath: string;
+  /** Detected app type tags (e.g. `vite_static`, `node_server`). */
   appTypes: string[];
+  /** Detected package manager, if a `package.json` was found. */
   packageManager?: string;
+  /** Scripts declared in `package.json`. */
   scripts: string[];
+  /** Dependency names from `package.json`. */
   dependencies: string[];
+  /** Inferred build output directory. */
   outputDir?: string;
+  /** Inferred build command. */
   buildCommand?: string;
+  /** IDs of matching deployment recipes. */
   recipeIds: string[];
+  /** Whether a `Dockerfile` exists. */
   hasDockerfile: boolean;
+  /** Whether a Docker Compose file exists. */
   hasComposeFile: boolean;
+  /** Diagnostic warnings. */
   warnings: string[];
 };
 
+/**
+ * Result of an HTTP health check.
+ */
 export type HealthCheckResult = {
+  /** URL that was checked. */
   url?: string;
+  /** Whether the response was HTTP 2xx. */
   ok: boolean;
+  /** HTTP status code. */
   status?: number;
+  /** HTTP status text. */
   statusText?: string;
+  /** Total request duration in milliseconds. */
   durationMs: number;
+  /** Human-readable outcome message. */
   message: string;
 };
 
+/**
+ * Detects app type signals by inspecting `package.json`, config files, and
+ * Docker-related files.
+ *
+ * @param projectRoot - Base directory of the Outpost project.
+ * @param projectPath - Optional relative sub-path to inspect instead of the root.
+ * @returns Detection results with app types, scripts, and recipe recommendations.
+ */
 export async function detectApp(projectRoot: string, projectPath?: string): Promise<DetectedApp> {
   const targetPath = resolveProjectPath(projectRoot, projectPath);
   const warnings: string[] = [];
@@ -110,6 +152,13 @@ export async function detectApp(projectRoot: string, projectPath?: string): Prom
   };
 }
 
+/**
+ * Performs an HTTP GET health check against a URL with a 10-second timeout.
+ *
+ * @param url - URL to request. If omitted the check immediately fails.
+ * @returns Health check result with timing and status information.
+ * @throws Error when the URL uses an unsupported protocol.
+ */
 export async function runHealthCheck(url?: string): Promise<HealthCheckResult> {
   const startedAt = Date.now();
   if (!url) {

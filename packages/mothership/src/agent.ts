@@ -1,3 +1,14 @@
+/**
+ * @module @outpost/mothership/agent
+ *
+ * OpenAI Agents SDK orchestration for the Mothership deployment operator.
+ *
+ * Defines the agent instructions, tool set, and both streamed and non-streamed
+ * run entry points.  Tools map directly to the Mothership tool catalog so the
+ * agent can inspect hosts, detect apps, send Outpost commands, and bootstrap
+ * VPS targets.
+ */
+
 import { Agent, OpenAIProvider, Runner, setTracingDisabled, tool } from "@openai/agents";
 import { parseOutpostCommand } from "@outpost/protocol";
 import { z } from "zod";
@@ -20,8 +31,10 @@ import {
   type AiOutpostRuntime
 } from "./outposts.js";
 
+/** Maximum agent tool-call turns before forcing a final answer. */
 const MAX_AGENT_TURNS = 500;
 
+/** Events emitted during a streamed agent run. */
 export type AgentStreamEvent =
   | { type: "thinking"; content: string }
   | { type: "tool_call"; toolName: string; input: unknown }
@@ -43,6 +56,13 @@ export type DeploymentAgentResult = {
   };
 };
 
+/**
+ * Runs the deployment agent synchronously (non-streamed) against a user message.
+ *
+ * @param input - User message and optional runtime handles.
+ * @returns Assistant response, tool call count, and token usage.
+ * @throws Error when the provider is not OpenAI or the agent fails.
+ */
 export async function runDeploymentAgent(input: {
   message: string;
   memoryContext?: string;
@@ -116,6 +136,14 @@ export async function runDeploymentAgent(input: {
   };
 }
 
+/**
+ * Runs the deployment agent in streamed mode, yielding real-time events.
+ *
+ * @param input - User message and optional runtime handles.
+ * @yields {@link AgentStreamEvent} objects describing the agent's progress.
+ * @returns Final assistant response, tool call count, and token usage.
+ * @throws Error when the provider is not OpenAI or the agent fails.
+ */
 export async function* runDeploymentAgentStreamed(input: {
   message: string;
   memoryContext?: string;

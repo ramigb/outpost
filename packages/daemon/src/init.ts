@@ -1,3 +1,10 @@
+/**
+ * @module @outpost/daemon/init
+ *
+ * One-time initialisation of an Outpost project: creates the `.outpost/`
+ * directory structure, generates signing keys, and writes a default config.
+ */
+
 import { pathExists, writeJsonFile } from "@outpost/shared";
 import {
   createDefaultOutpostConfig,
@@ -8,6 +15,14 @@ import {
   saveOutpostState
 } from "@outpost/shared";
 
+/**
+ * Initialises an Outpost project in the given directory.
+ *
+ * @param projectRoot - Directory to initialise. Defaults to `process.cwd()`.
+ *
+ * @remarks
+ * This is safe to run multiple times: it only creates files that are missing.
+ */
 export async function initOutpost(projectRoot = process.cwd()): Promise<void> {
   const paths = outpostPaths(projectRoot);
   await initializeOutpostDirectories(projectRoot);

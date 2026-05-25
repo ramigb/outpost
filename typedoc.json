@@ -1,0 +1,58 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Outpost API Documentation",
+  "entryPoints": [
+    "packages/protocol/src/index.ts",
+    "packages/shared/src/index.ts",
+    "packages/beacon/src/index.ts",
+    "packages/daemon/src/index.ts",
+    "packages/mothership/src/index.ts"
+  ],
+  "out": "docs/generated",
+  "plugin": ["typedoc-plugin-merge-modules"],
+  "mergeModulesMergeMode": "module",
+  "tsconfig": "tsconfig.base.json",
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeNotDocumented": false,
+  "readme": "README.md",
+  "includeVersion": true,
+  "hideGenerator": false,
+  "sort": ["source-order"],
+  "kindSortOrder": [
+    "Document",
+    "Project",
+    "Module",
+    "Namespace",
+    "Enum",
+    "EnumMember",
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Constructor",
+    "Property",
+    "Variable",
+    "Function",
+    "Accessor",
+    "Method",
+    "Reference",
+    "Parameter"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": false
+  },
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Protocol",
+    "Shared",
+    "Beacon",
+    "Daemon",
+    "Mothership",
+    "*"
+  ],
+  "highlightLanguages": ["typescript", "bash", "json"],
+  "sourceLinkTemplate": "https://github.com/outpost/outpost/blob/{gitRevision}/{path}#L{line}",
+  "gitRevision": "main"
+}

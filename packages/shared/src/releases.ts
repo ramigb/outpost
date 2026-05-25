@@ -1,9 +1,23 @@
+/**
+ * @module @outpost/shared/releases
+ *
+ * Release management helpers: formatting release IDs, listing, publishing,
+ * rolling back, and pruning old releases.
+ */
+
 import { lstat, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ReleaseMetadata } from "@outpost/protocol";
 import { outpostPaths } from "./config.js";
 import { atomicSymlink, copyDirectory, ensureDir } from "./fs.js";
 
+/**
+ * Generates a sortable release identifier from a timestamp and commit SHA.
+ *
+ * @param createdAt - Build completion time.
+ * @param commit - Full or short Git commit SHA.
+ * @returns Release ID in the form `<iso-timestamp>-<short-commit>`.
+ */
 export function formatReleaseId(createdAt: Date, commit: string): string {
   const timestamp = createdAt
     .toISOString()
@@ -12,6 +26,12 @@ export function formatReleaseId(createdAt: Date, commit: string): string {
   return `${timestamp}-${commit.slice(0, 7)}`;
 }
 
+/**
+ * Lists all releases stored under `.outpost/releases/`.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @returns Sorted array of `ReleaseMetadata` (oldest first).
+ */
 export async function listReleases(projectRoot: string): Promise<ReleaseMetadata[]> {
   const paths = outpostPaths(projectRoot);
   const names = await readdir(paths.releases).catch(() => []);
@@ -27,11 +47,18 @@ export async function listReleases(projectRoot: string): Promise<ReleaseMetadata
   return releases.sort((a, b) => a.releaseId.localeCompare(b.releaseId));
 }
 
+/**
+ * Publishes a release by copying build output into `.outpost/releases/<id>/`
+ * and atomically updating the `.outpost/live` symlink.
+ *
+ * @param input - Release publish parameters.
+ */
 export async function publishRelease(input: {
   projectRoot: string;
   releaseId: string;
   outputDir: string;
   metadata: ReleaseMetadata;
+  /** Optional filter applied while copying. */
   filter?: (src: string, dest: string) => boolean | Promise<boolean>;
 }): Promise<void> {
   const paths = outpostPaths(input.projectRoot);
@@ -41,6 +68,13 @@ export async function publishRelease(input: {
   await atomicSymlink(releaseDir, paths.live);
 }
 
+/**
+ * Rolls back the live symlink to a previous release without rebuilding.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @param releaseId - Existing release ID to restore.
+ * @throws Error when the release directory does not exist.
+ */
 export async function rollbackToRelease(projectRoot: string, releaseId: string): Promise<void> {
   const paths = outpostPaths(projectRoot);
   const releaseDir = join(paths.releases, releaseId);
@@ -51,6 +85,13 @@ export async function rollbackToRelease(projectRoot: string, releaseId: string):
   await atomicSymlink(releaseDir, paths.live);
 }
 
+/**
+ * Prunes old successful releases, keeping at most `retain` on disk.
+ *
+ * @param projectRoot - Directory of the managed project.
+ * @param retain - Number of successful releases to keep.
+ * @param activeReleaseId - Currently active release that must never be deleted.
+ */
 export async function pruneReleases(
   projectRoot: string,
   retain: number,

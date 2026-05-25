@@ -1,3 +1,13 @@
+/**
+ * @module @outpost/mothership/beaconClient
+ *
+ * WebSocket client layer that connects Mothership to one or more Beacon relays.
+ *
+ * {@link MothershipBeaconClient} manages a single relay connection, while
+ * {@link MothershipBeaconHub} multiplexes across multiple Beacons and routes
+ * Outpost commands to the best available relay.
+ */
+
 import WebSocket from "ws";
 import type {
   BuildLogEvent,
@@ -11,6 +21,9 @@ import { createSignedEnvelope } from "@outpost/shared";
 import type { MothershipState } from "./state.js";
 import { normalizeMothershipConfig, upsertOutpost } from "./state.js";
 
+/**
+ * Manages a single WebSocket connection to a Beacon relay.
+ */
 export class MothershipBeaconClient {
   private socket?: WebSocket;
   private reconnectTimer?: NodeJS.Timeout;
@@ -24,6 +37,7 @@ export class MothershipBeaconClient {
     private beaconUrl = state.config.beaconUrl
   ) {}
 
+  /** Opens the WebSocket connection and begins auto-reconnect logic. */
   connect(): void {
     this.closed = false;
     if (this.reconnectTimer) {
@@ -61,6 +75,7 @@ export class MothershipBeaconClient {
     socket.on("error", () => socket.close());
   }
 
+  /** Closes the current socket and reopens with updated state. */
   reconnect(state: MothershipState): void {
     this.state = state;
     this.socket?.removeAllListeners();
@@ -69,10 +84,18 @@ export class MothershipBeaconClient {
     this.connect();
   }
 
+  /** Updates the cached Mothership state without reconnecting. */
   updateState(state: MothershipState): void {
     this.state = state;
   }
 
+  /**
+   * Sends a typed command to an Outpost through this relay.
+   *
+   * @param outpostPeerId - Target Outpost peer ID.
+   * @param command - Typed command payload.
+   * @returns The signed envelope that was transmitted.
+   */
   sendCommand(outpostPeerId: string, command: OutpostCommand): SignedEnvelope<OutpostCommand> {
     const envelope = createSignedEnvelope({
       senderId: this.state.peerId,
@@ -93,10 +116,12 @@ export class MothershipBeaconClient {
     return envelope;
   }
 
+  /** Whether the socket is currently open. */
   isConnected(): boolean {
     return this.socket?.readyState === WebSocket.OPEN;
   }
 
+  /** Permanently closes the connection and disables auto-reconnect. */
   close(): void {
     this.closed = true;
     if (this.reconnectTimer) {
@@ -109,6 +134,7 @@ export class MothershipBeaconClient {
     this.onlinePeers.clear();
   }
 
+  /** Returns a serialisable snapshot of this client's current state. */
   snapshot(): BeaconSnapshot {
     return {
       url: this.beaconUrl,
@@ -164,6 +190,9 @@ export class MothershipBeaconClient {
   }
 }
 
+/**
+ * Serialisable snapshot of a single Beacon client connection.
+ */
 export type BeaconSnapshot = {
   connected: boolean;
   url: string;
@@ -172,17 +201,23 @@ export type BeaconSnapshot = {
   buildLogs: Array<{ peerId: string; event: BuildLogEvent }>;
 };
 
+/**
+ * Multiplexes {@link MothershipBeaconClient} instances across multiple
+ * Beacon relays and routes commands to the best available connection.
+ */
 export class MothershipBeaconHub {
   private clients = new Map<string, MothershipBeaconClient>();
 
   constructor(private state: MothershipState) {}
 
+  /** Connects clients for every Beacon configured in state. */
   connect(): void {
     for (const beacon of normalizeMothershipConfig(this.state.config).beacons ?? []) {
       this.ensureClient(beacon.url);
     }
   }
 
+  /** Reconciles clients after configuration changes. */
   reconnect(state: MothershipState): void {
     this.state = state;
     const wanted = new Set(
@@ -199,6 +234,7 @@ export class MothershipBeaconHub {
     this.connect();
   }
 
+  /** Updates state on all existing clients. */
   updateState(state: MothershipState): void {
     this.state = state;
     for (const client of this.clients.values()) {
@@ -206,6 +242,13 @@ export class MothershipBeaconHub {
     }
   }
 
+  /**
+   * Routes a command to the best Beacon client for the target Outpost.
+   *
+   * @param outpostPeerId - Target Outpost peer ID.
+   * @param command - Typed command to send.
+   * @returns The signed envelope.
+   */
   sendCommand(outpostPeerId: string, command: OutpostCommand): SignedEnvelope<OutpostCommand> {
     const outpost = this.state.outposts.find((item) => item.peerId === outpostPeerId);
     const preferred = outpost?.beaconUrl ? this.clients.get(outpost.beaconUrl) : undefined;
@@ -220,6 +263,7 @@ export class MothershipBeaconHub {
     return first.sendCommand(outpostPeerId, command);
   }
 
+  /** Aggregated snapshot across all Beacon connections. */
   snapshot(): BeaconSnapshot & { beacons: BeaconSnapshot[] } {
     const beacons = [...this.clients.values()].map((client) => client.snapshot());
     return {
@@ -235,6 +279,7 @@ export class MothershipBeaconHub {
     };
   }
 
+  /** Closes all clients and clears the hub. */
   close(): void {
     for (const client of this.clients.values()) {
       client.close();

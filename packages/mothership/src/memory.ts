@@ -1,7 +1,18 @@
+/**
+ * @module @outpost/mothership/memory
+ *
+ * Session memory and token-usage tracking for the Mothership AI agent.
+ *
+ * Persists recent conversation turns, summarises older context, estimates
+ * token budgets, and enforces a sliding-window tool-call quota to prevent
+ * runaway agent loops.
+ */
+
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathExists, writeJsonFile } from "@outpost/shared";
 
+/** Token usage snapshot. */
 export type TokenUsage = {
   inputTokens?: number;
   outputTokens?: number;
@@ -9,6 +20,9 @@ export type TokenUsage = {
   requests?: number;
 };
 
+/**
+ * Estimated token budget before a model request is sent.
+ */
 export type AgentContextUsage = {
   model: string;
   contextWindowTokens: number;
@@ -20,6 +34,7 @@ export type AgentContextUsage = {
   updatedAt: string;
 };
 
+/** Single conversation turn persisted in memory. */
 export type MemoryTurn = {
   at: string;
   user: string;
@@ -27,6 +42,7 @@ export type MemoryTurn = {
   toolCalls: number;
 };
 
+/** Full persisted memory state. */
 export type MemoryState = {
   version: 1;
   createdAt: string;
@@ -36,11 +52,16 @@ export type MemoryState = {
   lastUsage?: AgentContextUsage;
 };
 
+/**
+ * Bootstrap data returned when building the memory context for a new
+ * agent request.
+ */
 export type AgentMemoryBootstrap = {
   context: string;
   usage: AgentContextUsage;
 };
 
+/** Snapshot of the tool-call quota state. */
 export type AgentToolQuotaSnapshot = {
   limit: number;
   used: number;
@@ -49,6 +70,10 @@ export type AgentToolQuotaSnapshot = {
   warningThreshold: number;
 };
 
+/**
+ * Error thrown when the agent exceeds its tool-call quota within the
+ * current time window.
+ */
 export class AgentToolQuotaExceededError extends Error {
   constructor(snapshot: AgentToolQuotaSnapshot) {
     super(toolQuotaExceededMessage(snapshot));
@@ -66,14 +91,31 @@ const MAX_RECENT_TURNS = 4;
 const MAX_USER_CHARS = 700;
 const MAX_ASSISTANT_CHARS = 900;
 const EMPTY_SUMMARY = "No durable session facts yet.";
+
+/** Hard tool-call limit per 10-minute window. */
 export const AGENT_TOOL_CALL_LIMIT = 500;
+
+/** Duration of the tool-call quota window in milliseconds. */
 export const AGENT_TOOL_CALL_WINDOW_MS = 10 * 60_000;
+
+/** Threshold at which a warning event is emitted. */
 export const AGENT_TOOL_CALL_WARNING_THRESHOLD = Math.floor(AGENT_TOOL_CALL_LIMIT * 0.9);
 
+/**
+ * Checks whether a user message is the `/reset` memory command.
+ *
+ * @param message - Raw user message.
+ */
 export function isResetCommand(message: string): boolean {
   return message.trim().toLowerCase() === "/reset";
 }
 
+/**
+ * Returns filesystem paths for the session memory store.
+ *
+ * @param base - Directory override. Defaults to `process.cwd()/.memory` or
+ *   `MOTHERSHIP_MEMORY_DIR`.
+ */
 export function memoryPaths(
   base = process.env.MOTHERSHIP_MEMORY_DIR ?? join(process.cwd(), ".memory")
 ) {
@@ -86,12 +128,23 @@ export function memoryPaths(
   };
 }
 
+/**
+ * Wipes all session memory and returns a fresh default state.
+ */
 export async function resetAgentMemory(): Promise<MemoryState> {
   const paths = memoryPaths();
   await rm(paths.base, { recursive: true, force: true });
   return writeMemoryState(defaultMemoryState());
 }
 
+/**
+ * Builds the memory context and token budget estimate for an incoming
+ * agent request.
+ *
+ * @param model - Model identifier (used to look up context-window size).
+ * @param userMessage - Current user message.
+ * @returns Context string and estimated usage.
+ */
 export async function buildAgentMemoryBootstrap(
   model: string,
   userMessage: string
@@ -116,6 +169,12 @@ export async function buildAgentMemoryBootstrap(
   };
 }
 
+/**
+ * Appends a new conversation turn to session memory.
+ *
+ * @param input - Turn data and usage information.
+ * @returns Updated memory state.
+ */
 export async function appendAgentMemory(input: {
   userMessage: string;
   assistantMessage: string;
@@ -144,6 +203,9 @@ export async function appendAgentMemory(input: {
   return writeMemoryState(next);
 }
 
+/**
+ * Returns the current memory state plus filesystem paths.
+ */
 export async function getAgentMemorySnapshot(): Promise<
   MemoryState & { paths: ReturnType<typeof memoryPaths> }
 > {
@@ -151,6 +213,12 @@ export async function getAgentMemorySnapshot(): Promise<
   return { ...state, paths: memoryPaths() };
 }
 
+/**
+ * Consumes one tool-call slot from the quota.
+ *
+ * @returns Updated quota snapshot.
+ * @throws {@link AgentToolQuotaExceededError} when the limit is reached.
+ */
 export async function consumeAgentToolCall(): Promise<AgentToolQuotaSnapshot> {
   const state = await readToolQuotaState();
   if (state.used >= AGENT_TOOL_CALL_LIMIT) {
@@ -162,14 +230,27 @@ export async function consumeAgentToolCall(): Promise<AgentToolQuotaSnapshot> {
   }).then(snapshotToolQuota);
 }
 
+/**
+ * Returns the current tool-call quota snapshot.
+ */
 export async function getAgentToolQuotaSnapshot(): Promise<AgentToolQuotaSnapshot> {
   return snapshotToolQuota(await readToolQuotaState());
 }
 
+/**
+ * Whether the quota has crossed the warning threshold.
+ *
+ * @param snapshot - Current quota snapshot.
+ */
 export function shouldWarnAgentToolQuota(snapshot: AgentToolQuotaSnapshot): boolean {
   return snapshot.used >= snapshot.warningThreshold;
 }
 
+/**
+ * Human-readable warning message for the current quota state.
+ *
+ * @param snapshot - Current quota snapshot.
+ */
 export function toolQuotaWarningMessage(snapshot: AgentToolQuotaSnapshot): string {
   return [
     `Tool call warning: ${snapshot.used}/${snapshot.limit} calls used in the current 10-minute window.`,
@@ -326,6 +407,12 @@ function singleLine(value: string, maxChars: number): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxChars);
 }
 
+/**
+ * Rough token estimate used for context-window budgeting.
+ *
+ * @param value - Text to estimate.
+ * @returns Estimated token count.
+ */
 export function estimateTokens(value: string): number {
   return Math.ceil(value.length / 4);
 }

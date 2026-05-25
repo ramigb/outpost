@@ -1,3 +1,11 @@
+/**
+ * @module @outpost/mothership/bootstrap
+ *
+ * SSH-based VPS bootstrap orchestration.  Provisions Node.js and Docker,
+ * clones or copies an app repository, transfers the local Outpost runtime
+ * when requested, pairs the Outpost, and optionally deploys.
+ */
+
 import { spawn } from "node:child_process";
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -11,6 +19,9 @@ import {
   saveMothershipConfig
 } from "./state.js";
 
+/**
+ * Parameters for a bootstrap request.
+ */
 export type BootstrapRequest = {
   sshTarget: string;
   repo: string;
@@ -29,6 +40,9 @@ export type BootstrapRequest = {
   beaconPort?: number;
 };
 
+/**
+ * Persistent record of a bootstrap operation.
+ */
 export type BootstrapOperation = {
   id: string;
   status: "running" | "success" | "failed";
@@ -49,6 +63,9 @@ export type BootstrapOperation = {
   logs: Array<{ stream: "stdout" | "stderr" | "system"; line: string; createdAt: string }>;
 };
 
+/**
+ * Lists all persisted bootstrap operations, newest first.
+ */
 export async function listBootstrapOperations(): Promise<BootstrapOperation[]> {
   const path = mothershipPaths().bootstrapOperations;
   if (!(await pathExists(path))) {
@@ -57,6 +74,12 @@ export async function listBootstrapOperations(): Promise<BootstrapOperation[]> {
   return readJsonFile<BootstrapOperation[]>(path);
 }
 
+/**
+ * Starts a new bootstrap operation against a remote VPS.
+ *
+ * @param input - Bootstrap parameters.
+ * @returns The created operation record (status will be `"running"`).
+ */
 export async function startBootstrap(input: BootstrapRequest): Promise<BootstrapOperation> {
   const sshTarget = assertSshTarget(input.sshTarget);
   const repo = input.repo.trim();
